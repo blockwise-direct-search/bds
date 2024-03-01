@@ -106,7 +106,7 @@ jobs:
             test_nomad_gerad();
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3.1.2
+        uses: actions/upload-artifact@v4
         with:
           name: test_bds_nomad_big
           path: ./tests/testdata
