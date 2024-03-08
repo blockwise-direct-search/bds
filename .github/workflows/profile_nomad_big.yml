@@ -93,7 +93,7 @@ jobs:
         run: cd ./nomad && cmake --install build/release
 
       - name: Run test
-        uses: matlab-actions/run-command@v1.2.2
+        uses: matlab-actions/run-command@v2.1.0
         with:
           command: |
             root_dir = pwd()
