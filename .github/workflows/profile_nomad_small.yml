@@ -77,7 +77,7 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.matlab }}-${{ matrix.with_optim_toolbox }}
 
       - name: Set up MATLAB 
-        uses: matlab-actions/setup-matlab@v2-beta
+        uses: matlab-actions/setup-matlab@v2.1.1
         with:
           release: ${{ matrix.matlab }}
 
