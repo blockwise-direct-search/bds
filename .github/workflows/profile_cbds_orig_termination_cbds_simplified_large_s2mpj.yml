@@ -1,7 +1,7 @@
 name: Profile original cbds termination with simplified cbds, large, s2mpj
 on:
   # Trigger the workflow on push or pull request
-  # push:
+  push:
   # Trigger the workflow manually
   # schedule:
   # - cron: '0 0 */2 * *'
