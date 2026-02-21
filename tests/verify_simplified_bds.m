@@ -51,20 +51,20 @@ try
     solvers = {"bds", "bds_simplified"};
 
     % Get list of problems
-    if isfield(parameters, "problem_type")
-        options_s2mpj.ptype = parameters.problem_type;
+    if isfield(parameters, "ptype")
+        options_s2mpj.ptype = parameters.ptype;
     else
         options_s2mpj.ptype = "u";
     end
 
-    if isfield(parameters, "problem_mindim")
-        options_s2mpj.mindim = parameters.problem_mindim;
+    if isfield(parameters, "mindim")
+        options_s2mpj.mindim = parameters.mindim;
     else
         options_s2mpj.mindim = 1;
     end
 
-    if isfield(parameters, "problem_maxdim")
-        options_s2mpj.maxdim = parameters.problem_maxdim;
+    if isfield(parameters, "maxdim")
+        options_s2mpj.maxdim = parameters.maxdim;
     else
         options_s2mpj.maxdim = 10;
     end

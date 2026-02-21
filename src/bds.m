@@ -214,6 +214,7 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %   grad_xhist       History of points where the estimated gradients are computed (if 
 %                    output_grad_hist is true).
 %   xhist            History of points visited (if output_xhist is true).
+%   invalid_points   History of points where the function evaluation fails (if output_xhist is true).
 %   alpha_hist       History of step sizes for each iteration (present only if output_alpha_hist
 %                    is true).
 %                    Note that not all blocks are necessarily visited in every iteration. For blocks
@@ -366,12 +367,6 @@ grad_info.step_size_per_block = alpha_all;
 grad_info.fbase_per_batch = nan(batch_size, 1);
 grad_info.complete_direction_set = D;
 
-% invalid_points will store the points where the function evaluation fails.
-% Specifically, it records points that result in NaN values or trigger an error
-% during the function evaluation. This information can be useful for debugging
-% or analyzing problematic regions in the search space.
-invalid_points = [];
-
 % Initialize exitflag.
 % If exitflag is not set elsewhere, then the maximum number of iterations
 % is reached, and hence we initialize exitflag to the corresponding value.
@@ -385,10 +380,16 @@ exitflag = get_exitflag("MAXIT_REACHED");
 % fhist (history of function values).
 nf = 1;
 if output_xhist
+    % invalid_points will store the points where the function evaluation fails.
+    % Specifically, it records points that result in NaN values or trigger an error
+    % during the function evaluation. This information can be useful for debugging
+    % or analyzing problematic regions in the search space. Note that invalid_points
+    % will only be included in the output if output_xhist is set to true.
+    invalid_points = [];
     xhist(:, nf) = x0;
-end
-if ~is_valid
-    invalid_points = [invalid_points, x0];
+    if ~is_valid
+        invalid_points = [invalid_points, x0];
+    end
 end
 % When we record fhist, we should use the real function value at x0, which is f0_real.
 fhist(nf) = f0_real;
@@ -533,9 +534,9 @@ for iter = 1:maxit
         % Record the points visited by inner_direct_search if output_xhist is true.
         if output_xhist
             xhist(:, (nf+1):(nf+sub_output.nf)) = sub_output.xhist;
+            invalid_points = [invalid_points, sub_output.invalid_points];
         end
-        invalid_points = [invalid_points, sub_output.invalid_points];
-
+        
         % Record the function values calculated by inner_direct_search,
         fhist((nf+1):(nf+sub_output.nf)) = sub_output.fhist;
 
