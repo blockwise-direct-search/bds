@@ -212,14 +212,12 @@ if isfield(options, "alpha_init")
         %         alpha_vec(i) = 1;
         %     end
         % end
-        for i=1:n
-            val=abs(x0(i));
-            if val > 1
-            alpha_vec(i) = val^0.5;
-            elseif val ~= 0
-            alpha_vec(i) = max(val, options.StepTolerance(i));
+        for i= 1:n
+            val = abs(x0(i));
+            if val == 0
+                alpha_vec(i) = 1;
             else
-            alpha_vec(i) = 1;
+                alpha_vec(i) = max(options.StepTolerance(i), min(val, max(1, 0.1*val)));
             end
         end
         options.alpha_init = alpha_vec;
