@@ -1492,21 +1492,7 @@ function x = cbds_orig_smart_alpha_init_test(fun, x0)
     option.expand = 2;
     option.shrink = 0.5;
 
-    % Parameters (Data-Driven Optimized)
-    AlphaFloor    = 1e-6; % 完美兜底，应对如 KIRBY2LS 中的 1e-05 变量
-
-    % Calculate Smart Alpha
-    n = numel(x0);
-    alpha_vec = zeros(n, 1);
-    for i = 1:n
-        if x0(i) ~= 0
-            alpha_vec(i) = max(abs(x0(i)), AlphaFloor);
-        else
-            alpha_vec(i) = 1;
-        end
-    end
-
-    option.alpha_init = alpha_vec;
+    option.alpha_init = 'auto';
 
     x = bds(fun, x0, option);
     
