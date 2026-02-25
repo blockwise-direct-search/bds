@@ -2,7 +2,7 @@ name: Profile original cbds with smart alpha init, big, matcutest
 
 on:
   # Trigger the workflow on # push or pull request
-  push:
+  # push:
   # Trigger the workflow manually
   # schedule:
   # - cron: '0 0 */2 * *'
