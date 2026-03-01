@@ -266,7 +266,7 @@ function [solver_scores, profile_scores] = tuning_optiprofiler(parameters, optio
     end
 
     if isfield(options, 'plibs')
-        options.benchmark_id = [options.benchmark_id, '_', options.plibs];
+        options.benchmark_id = [options.benchmark_id, '_', get_plibs_benchmark_id(options.plibs)];
     end
 
     options.benchmark_id = [options.benchmark_id, '_', time_str];
@@ -276,8 +276,7 @@ function [solver_scores, profile_scores] = tuning_optiprofiler(parameters, optio
     end
 
     if ~isfield(options, 'problem_names')
-        if isfield(options, 'plibs') && strcmpi(options.plibs, 'matcutest')
-            options.excludelist = {'ARGTRIGLS',...
+        matcutest_excludelist = {'ARGTRIGLS',...
             'BROWNAL',...
             'COATING',...
             'DIAMON2DLS',...
@@ -313,8 +312,7 @@ function [solver_scores, profile_scores] = tuning_optiprofiler(parameters, optio
             'OSBORNEA',...
             'ECKERLE4LS',...
             'NELSONLS'};
-        else
-            options.excludelist = {'DIAMON2DLS',...
+        s2mpj_excludelist = {'DIAMON2DLS',...
             'DIAMON2D',...
             'DIAMON3DLS',...
             'DIAMON3D',...
@@ -356,6 +354,20 @@ function [solver_scores, profile_scores] = tuning_optiprofiler(parameters, optio
             'OSBORNEA',...
             'ECKERLE4LS',...
             'NELSONLS'};
+
+        if isfield(options, 'plibs')
+            plibs = normalize_plibs(options.plibs);
+            if isequal(plibs, {'matcutest'})
+                options.excludelist = matcutest_excludelist;
+            elseif isequal(plibs, {'s2mpj'})
+                options.excludelist = s2mpj_excludelist;
+            elseif isequal(plibs, {'matcutest', 's2mpj'})
+                options.excludelist = union(matcutest_excludelist, s2mpj_excludelist, 'stable');
+            else
+                options.excludelist = s2mpj_excludelist;
+            end
+        else
+            options.excludelist = s2mpj_excludelist;
         end
     end
 
@@ -702,4 +714,37 @@ function benchmark_id = append_param_to_id(benchmark_id, param_name, param_value
         end
     end
     benchmark_id = [benchmark_id, '_', param_name, '_', param_str];
+end
+
+function plibs = normalize_plibs(plibs)
+    if ischar(plibs)
+        plibs = {plibs};
+    elseif isstring(plibs)
+        plibs = cellstr(plibs);
+    end
+
+    plibs = lower(plibs);
+
+    ordered_plibs = {};
+    if any(strcmp(plibs, 'matcutest'))
+        ordered_plibs{end + 1} = 'matcutest';
+    end
+    if any(strcmp(plibs, 's2mpj'))
+        ordered_plibs{end + 1} = 's2mpj';
+    end
+
+    if isempty(ordered_plibs)
+        plibs = unique(plibs, 'stable');
+    else
+        plibs = ordered_plibs;
+    end
+end
+
+function plibs_benchmark_id = get_plibs_benchmark_id(plibs)
+    plibs = normalize_plibs(plibs);
+    if isequal(plibs, {'matcutest', 's2mpj'})
+        plibs_benchmark_id = 'matcutest_s2mpj';
+    else
+        plibs_benchmark_id = strjoin(plibs, '_');
+    end
 end
