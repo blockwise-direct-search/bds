@@ -124,7 +124,7 @@ jobs:
 
       # 修正点 2：显式下载 Artifacts，创建 downloaded_artifacts 目录
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: tests/tuning/tuning_data/downloaded_artifacts
 
