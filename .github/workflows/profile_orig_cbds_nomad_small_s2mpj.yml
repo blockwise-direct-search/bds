@@ -78,7 +78,7 @@ jobs:
         run: echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6" >> $GITHUB_ENV
 
       - name: Run test
-        uses: matlab-actions/run-command@v2.1.1
+        uses: matlab-actions/run-command@v3.2
         with:
             command: |
               root_dir = pwd()

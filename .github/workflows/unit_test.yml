@@ -38,7 +38,7 @@ jobs:
           release: ${{ matrix.matlab }}
 
       - name: Run unit test
-        uses: matlab-actions/run-command@v2.1.1
+        uses: matlab-actions/run-command@v3.2
         with:
           command: |
             root_dir = pwd()
