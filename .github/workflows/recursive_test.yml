@@ -78,7 +78,7 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.matlab }}-yes
 
       - name: Set up MATLAB with optimization toolbox and parallel computing toolbox
-        uses: matlab-actions/setup-matlab@v2.1.2
+        uses: matlab-actions/setup-matlab@v3.0.1
         with:
           release: ${{ matrix.matlab }}
           products: Optimization_Toolbox Parallel_Computing_Toolbox
