@@ -120,7 +120,7 @@ jobs:
           done
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: profile_optiprofiler_cbds_func_20_tol_06_grad_01_tol_06_500n_${{ matrix.plibs }}_${{ matrix.dim }}_${{ matrix.feature }}
           path: ./tests/tuning/tuning_data/**
@@ -182,7 +182,7 @@ jobs:
           fi
 
       - name: Upload merged artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         env:
           BASE_INFO: ${{ env.BASE_INFO }}
         with:
@@ -190,7 +190,7 @@ jobs:
           path: tests/tuning/tuning_data/downloaded_artifacts/**
 
       - name: Upload summary files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         env:
           BASE_INFO: ${{ env.BASE_INFO }}
         with:

@@ -99,7 +99,7 @@ jobs:
 
       # 修正点 1：使用唯一的 Artifact 名字，防止覆盖
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: profile_optiprofiler_cbds_func_window_size_01_tol_06_${{ matrix.plibs }}_${{ matrix.dim }}_${{ matrix.feature }}
           path: ./tests/tuning/tuning_data/**
@@ -156,13 +156,13 @@ jobs:
           fi
 
       - name: Upload merged artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: merged_profiles_cbds_func_window_size_01_tol_06_small_matcutest
           path: tests/tuning/tuning_data/downloaded_artifacts/**
 
       - name: Upload summary files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summary_files_cbds_func_window_size_01_tol_06_small_matcutest
           path: tests/tuning/tuning_data/downloaded_artifacts/summary_cbds_func_window_size_01_tol_06_small_matcutest/**
