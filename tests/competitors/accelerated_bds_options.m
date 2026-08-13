@@ -706,11 +706,8 @@ for iter = 1:maxit
     xbase_iteration_start = xbase;
     fbase_iteration_start = fbase;
 
-    % Initialize flags that record accepted improvement during the iteration.
-    % iteration_improved summarizes the net decrease in fbase from the iteration
-    % start. post_poll_acceleration_succeeded records an accepted post-poll
-    % acceleration update using that phase's own acceptance rule.
-    iteration_improved = false;
+    % Record whether the post-poll acceleration phase accepts an update using
+    % that phase's own acceptance rule.
     post_poll_acceleration_succeeded = false;
 
     % Pre-poll phase: try the productive directions retained from previous iterations.
@@ -763,7 +760,6 @@ for iter = 1:maxit
     % each block qualifies for gradient estimation based on specific criteria.
     sampled_direction_indices_per_batch = cell(1, batch_size);
     function_values_per_batch = cell(1, batch_size);
-    sampled_points_per_batch = cell(1, batch_size);
     % When the following two conditions are satisfied, the block is eligible for gradient estimation:
     % (1) sufficient decrease criterion is not met.
     % (2) all directions in the block have been evaluated.
@@ -847,7 +843,6 @@ for iter = 1:maxit
 
         % Store function values for the current batch.
         function_values_per_batch{i} = sub_output.fhist;
-        sampled_points_per_batch{i} = sub_output.xhist;
 
         % Record whether all directions in the i_real-th block have been evaluated and
         % sufficient decrease is not achieved.
@@ -961,19 +956,15 @@ for iter = 1:maxit
         end
     end
 
-    % Summarize the net displacement and objective decrease accumulated since the beginning
-    % of the current iteration. The post-poll acceleration phase uses the displacement norm
-    % to decide whether the iteration step is large enough for pattern or momentum search.
+    % Summarize the net displacement accumulated since the beginning of the
+    % current iteration for the post-poll acceleration phase.
     iteration_step = xbase - xbase_iteration_start;
-    iteration_step_norm = norm(iteration_step);
-    if fbase < fbase_iteration_start
-        iteration_improved = true;
-    end
 
     % Post-poll acceleration phase: try a pattern step, then momentum if needed.
     % The entry guard stays here to keep the phase ordering visible; accel_state
     % packs exactly the mutable state the phase may update.
-    if ~terminate && iteration_improved && iteration_step_norm > accel_config.step_floor ...
+    if ~terminate && fbase < fbase_iteration_start ...
+            && norm(iteration_step) > accel_config.step_floor ...
             && nf < MaxFunctionEvaluations ...
             && (options.use_iteration_pattern_step || options.use_momentum_extrapolation)
         accel_state = struct( ...
@@ -1100,18 +1091,19 @@ for iter = 1:maxit
 
                 % Core gradient-stopping decision. Every value in the window must satisfy at
                 % least one of the relative and absolute thresholds.
-                gradient_criterion_satisfied = reference_grad_norm_initialized ...
+                if reference_grad_norm_initialized ...
                     && all((norm_grad_window < grad_tol * min(1, reference_grad_norm)) ...
                         | (norm_grad_window < options.grad_reference_relative_tol ...
-                            * max(1, reference_grad_norm)));
-
-                if gradient_criterion_satisfied
+                            * max(1, reference_grad_norm)))
                     terminate = true;
                     exitflag = get_exitflag("SMALL_ESTIMATE_GRADIENT");
                 end
 
-                previous_gradient = grad;
-                previous_gradient_x = xbase;
+                if ~reference_grad_norm_initialized ...
+                        && options.use_gradient_reference_consistency
+                    previous_gradient = grad;
+                    previous_gradient_x = xbase;
+                end
 
             end
         end
