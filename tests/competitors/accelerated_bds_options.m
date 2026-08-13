@@ -523,7 +523,8 @@ grad_tol = options.grad_tol;
 % Initialize with nan to disable the stopping test until the window is fully replaced with
 % valid gradient norms.
 norm_grad_window = nan(1, grad_window_size);
-record_gradient_norm = false;
+reference_grad_norm_initialized = false;
+reference_candidate_reliable = ~options.use_gradient_reference_consistency;
 previous_gradient = [];
 previous_gradient_x = [];
 
@@ -1079,43 +1080,30 @@ for iter = 1:maxit
                 % Passing the consistency test is necessary but not sufficient for initialization.
                 % The gradient error test below must also pass. Once reference_grad_norm has
                 % been initialized, the consistency test is no longer needed and is not computed.
-                reference_candidate_reliable = ~options.use_gradient_reference_consistency;
-                if ~record_gradient_norm && options.use_gradient_reference_consistency
+                % Core gradient-stopping state update. Before initialization, a reliable estimate
+                % establishes the fixed reference scale. After initialization, each new estimate
+                % is appended to the sliding window as a conservative norm upper bound.
+                if ~reference_grad_norm_initialized && options.use_gradient_reference_consistency
                     reference_candidate_reliable = ~isempty(previous_gradient) ...
                         && isequal(xbase, previous_gradient_x) ...
-                        && norm(grad - previous_gradient) / ...
+                        && (norm(grad - previous_gradient) / ...
                             max([1, norm(grad), norm(previous_gradient)]) ...
-                            <= options.grad_reference_raw_tol;
+                            <= options.grad_reference_raw_tol);
                 end
-
-                % Core gradient-stopping state update. Before initialization, a reliable estimate
-                % establishes the fixed reference scale. After initialization, each estimate is
-                % appended to the sliding window as a conservative norm upper bound.
-                if ~record_gradient_norm
-                    if reference_candidate_reliable ...
-                            && grad_error < max(1e-3, 1e-1 * norm(grad))
-                        reference_grad_norm = norm(grad) + grad_error;
-                        record_gradient_norm = true;
-                    end
-                else
+                if ~reference_grad_norm_initialized && reference_candidate_reliable ...
+                        && grad_error < max(1e-3, 1e-1 * norm(grad))
+                    reference_grad_norm = norm(grad) + grad_error;
+                    reference_grad_norm_initialized = true;
+                elseif reference_grad_norm_initialized
                     norm_grad_window = [norm_grad_window(2:end), norm(grad) + grad_error];
-                end
-
-                % The stopping thresholds are available only after the reference scale has
-                % been initialized.
-                threshold_relative = nan;
-                threshold_absolute_fallback = nan;
-                if record_gradient_norm
-                    threshold_relative = grad_tol * min(1, reference_grad_norm);
-                    threshold_absolute_fallback = options.grad_reference_relative_tol ...
-                        * max(1, reference_grad_norm);
                 end
 
                 % Core gradient-stopping decision. Every value in the window must satisfy at
                 % least one of the relative and absolute thresholds.
-                gradient_criterion_satisfied = record_gradient_norm ...
-                    && all((norm_grad_window < threshold_relative) ...
-                        | (norm_grad_window < threshold_absolute_fallback));
+                gradient_criterion_satisfied = reference_grad_norm_initialized ...
+                    && all((norm_grad_window < grad_tol * min(1, reference_grad_norm)) ...
+                        | (norm_grad_window < options.grad_reference_relative_tol ...
+                            * max(1, reference_grad_norm)));
 
                 if gradient_criterion_satisfied
                     terminate = true;
