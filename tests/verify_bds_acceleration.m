@@ -136,9 +136,8 @@ end
 
 end
 
-function [xopt, fopt, exitflag, output] = run_lean_reference(fun, x0, options)
+function [xopt, fopt, exitflag, output] = run_lean_reference(fun, x0, ~)
 
-unused_options = options; %#ok<NASGU>
 [xopt, fopt, exitflag, output] = lean_evolved_bds(@safe_fun, x0);
 output = lean_algorithmic_output(output);
 
@@ -149,9 +148,8 @@ output = lean_algorithmic_output(output);
 end
 
 function [xopt, fopt, exitflag, output] = run_accelerated_bds_lean( ...
-        fun, x0, options, use_algorithm_cbds)
+        fun, x0, ~, use_algorithm_cbds)
 
-unused_options = options; %#ok<NASGU>
 accel_options = struct();
 if use_algorithm_cbds
     accel_options.Algorithm = 'cbds';
