@@ -38,16 +38,16 @@ fprintf('BDS_MOMENTUM_DUPLICATE_OK\n');
     end
 
     function verify_reference_budget_case()
-        original_calls = run_reference_1d(@lean_evolved_bds_original);
-        deduplicated_calls = run_reference_1d(@lean_evolved_bds);
         legacy_calls = run_reference_1d(@lean_evolved_bds_legacy);
+        original_calls = run_reference_1d(@lean_evolved_bds_original);
+        current_calls = run_reference_1d(@lean_evolved_bds);
 
-        assert(isequal(original_calls(1:4), [0, 1, 2, 2]), ...
-            'The preserved lean reference does not expose the expected duplicate.');
-        assert(isequal(legacy_calls(1:4), original_calls(1:4)), ...
-            'The misc legacy copy does not preserve the original behavior.');
-        assert(isequal(deduplicated_calls(1:4), [0, 1, 2, 3]), ...
-            'The copied lean reference did not reuse the saved evaluation budget.');
+        assert(isequal(legacy_calls(1:4), [0, 1, 2, 2]), ...
+            'The misc legacy copy does not expose the expected duplicate.');
+        assert(isequal(original_calls(1:4), [0, 1, 2, 3]), ...
+            'The pre-termination lean snapshot did not preserve duplicate suppression.');
+        assert(isequal(current_calls, original_calls), ...
+            'The current lean solver changed when function-value stopping is disabled.');
     end
 
     function calls = run_reference_1d(solver, objective)
@@ -65,9 +65,9 @@ fprintf('BDS_MOMENTUM_DUPLICATE_OK\n');
 
     function verify_nontriggering_case()
         original_calls = run_reference_1d(@lean_evolved_bds_original, @(x) -x);
-        deduplicated_calls = run_reference_1d(@lean_evolved_bds, @(x) -x);
-        assert(isequal(original_calls, deduplicated_calls), ...
-            'The deduplication guard changed a trajectory without an exact duplicate.');
+        current_calls = run_reference_1d(@lean_evolved_bds, @(x) -x);
+        assert(isequal(original_calls, current_calls), ...
+            'The current lean solver changed a nontriggering trajectory.');
     end
 
 end

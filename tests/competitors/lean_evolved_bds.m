@@ -1,11 +1,62 @@
-function [xopt, fopt, exitflag, output] = lean_evolved_bds(fun, x0)
+function [xopt, fopt, exitflag, output] = lean_evolved_bds(fun, x0, termination_options)
 %LEAN_EVOLVED_BDS MATLAB port of the Python Lean Evolved BDS competitor.
 %
-% This file intentionally mirrors tests/competitors/evolved_bds_solver_lean.py
-% in bds_python.  The solver keeps only:
+% This file follows tests/competitors/evolved_bds_solver_lean.py in bds_python
+% and adds optional function-value and estimated-gradient stopping references
+% for focused comparison with accelerated_bds_options. The solver keeps only:
 %   - ordinary direction cycling within each coordinate block;
 %   - explicit productive displacement memory;
 %   - sweep-level pattern / momentum extrapolation.
+
+if nargin < 3
+    termination_options = struct();
+end
+
+use_function_value_stop = false;
+func_window_size = 20;
+func_tol = 1e-6;
+use_estimated_gradient_stop = false;
+grad_window_size = 1;
+grad_tol = 1e-6;
+lipschitz_constant = 1e3;
+use_gradient_reference_consistency = true;
+grad_reference_finite_difference_error_tol = 1/30;
+grad_reference_relative_tol = 1e-2;
+if isfield(termination_options, 'use_function_value_stop')
+    use_function_value_stop = termination_options.use_function_value_stop;
+end
+if isfield(termination_options, 'func_window_size')
+    func_window_size = termination_options.func_window_size;
+end
+if isfield(termination_options, 'func_tol')
+    func_tol = termination_options.func_tol;
+end
+if isfield(termination_options, 'use_estimated_gradient_stop')
+    use_estimated_gradient_stop = termination_options.use_estimated_gradient_stop;
+end
+if isfield(termination_options, 'grad_window_size')
+    grad_window_size = termination_options.grad_window_size;
+end
+if isfield(termination_options, 'grad_tol')
+    grad_tol = termination_options.grad_tol;
+end
+if isfield(termination_options, 'lipschitz_constant')
+    lipschitz_constant = termination_options.lipschitz_constant;
+end
+if isfield(termination_options, 'use_gradient_reference_consistency')
+    use_gradient_reference_consistency = ...
+        termination_options.use_gradient_reference_consistency;
+end
+if isfield(termination_options, 'grad_reference_finite_difference_error_tol')
+    grad_reference_finite_difference_error_tol = ...
+        termination_options.grad_reference_finite_difference_error_tol;
+end
+if isfield(termination_options, 'grad_reference_relative_tol')
+    grad_reference_relative_tol = ...
+        termination_options.grad_reference_relative_tol;
+end
+fopt_window = inf(1, func_window_size);
+reference_function_value = nan;
 
 x0 = x0(:);
 n = numel(x0);
@@ -16,6 +67,13 @@ alpha_all = ones(n, 1);
 expand = 2.0;
 shrink = 0.5;
 eps_m = eps;
+grad_reference_raw_tol = grad_reference_finite_difference_error_tol ...
+    * (1 - shrink^2) / shrink^2;
+norm_grad_window = nan(1, grad_window_size);
+reference_grad_norm_initialized = false;
+reference_candidate_reliable = ~use_gradient_reference_consistency;
+previous_gradient = [];
+previous_gradient_x = [];
 
 D = zeros(n, 2 * n);
 D(:, 1:2:end) = eye(n);
@@ -39,6 +97,10 @@ xbase = x0;
 fbase = f0;
 xopt = x0;
 fopt = f0;
+if isfinite(fopt)
+    reference_function_value = fopt;
+end
+fopt_window = [fopt_window(2:end), fopt];
 exitflag = 0;
 terminate = false;
 
@@ -46,6 +108,13 @@ for iter = 1:maxit
     xbase_sweep_start = xbase;
     fbase_sweep_start = fbase;
     sweep_improved = false;
+    post_poll_acceleration_succeeded = false;
+    if use_estimated_gradient_stop
+        sampled_direction_indices_per_block = cell(n, 1);
+        function_values_per_block = cell(n, 1);
+        gradient_step_sizes = nan(n, 1);
+        block_gradient_available = false(n, 1);
+    end
 
     % Explicit productive displacement memory beyond cycling.
     if ~isempty(prod_memory) && nf < maxfun
@@ -79,9 +148,19 @@ for iter = 1:maxit
             break;
         end
         direction_indices = grouped_direction_indices{i};
+        if use_estimated_gradient_stop
+            gradient_step_sizes(i) = alpha_all(i);
+        end
         [sub_xopt, sub_fopt, ~, sub_output] = inner_direct_search( ...
             fun, xbase, fbase, D, direction_indices, alpha_all(i), max(0, maxfun - nf));
         nf = nf + sub_output.nf;
+        if use_estimated_gradient_stop
+            sampled_direction_indices_per_block{i} = direction_indices(1:sub_output.nf);
+            function_values_per_block{i} = sub_output.function_values;
+            block_gradient_available(i) = ...
+                sub_output.nf == numel(direction_indices) ...
+                && ~sub_output.sufficient_decrease;
+        end
         fopt_all(i) = sub_fopt;
         xopt_all(:, i) = sub_xopt;
         grouped_direction_indices{i} = sub_output.direction_indices;
@@ -181,6 +260,7 @@ for iter = 1:maxit
         end
 
         if f_pat < fbase
+            post_poll_acceleration_succeeded = true;
             xbase = x_pat;
             fbase = f_pat;
             if ~isempty(best_dir)
@@ -195,7 +275,79 @@ for iter = 1:maxit
         xopt = xbase;
     end
 
-    if nf >= maxfun || all(alpha_all < alpha_tol)
+    if isnan(reference_function_value) && isfinite(fopt)
+        reference_function_value = fopt;
+    end
+    fopt_window = [fopt_window(2:end), fopt];
+
+    if use_function_value_stop && ~post_poll_acceleration_succeeded ...
+            && isfinite(reference_function_value) && all(isfinite(fopt_window))
+        func_change = max(fopt_window) - min(fopt_window);
+        if func_change < (func_tol * min(1, abs(fopt - reference_function_value))) || ...
+                func_change < (1e-3 * func_tol * max(1, abs(fopt - reference_function_value)))
+            terminate = true;
+            exitflag = 4;
+        end
+    end
+
+    % The lean reference has the fixed CBDS structure: every block contains
+    % the positive and negative coordinate directions. Reconstruct the same
+    % central-difference estimate independently from the recorded poll values.
+    if use_estimated_gradient_stop && ~post_poll_acceleration_succeeded ...
+            && all(block_gradient_available)
+        grad = nan(n, 1);
+        for i = 1:n
+            direction_indices = sampled_direction_indices_per_block{i};
+            function_values = function_values_per_block{i};
+            positive_position = find(direction_indices == 2 * i - 1, 1);
+            negative_position = find(direction_indices == 2 * i, 1);
+            if ~isempty(positive_position) && ~isempty(negative_position)
+                grad(i) = (function_values(positive_position) ...
+                    - function_values(negative_position)) ...
+                    / (2 * gradient_step_sizes(i));
+            end
+        end
+
+        if isreal(grad) && all(isfinite(grad))
+            % For the canonical coordinate basis with all n blocks visited,
+            % get_gradient_error_bound reduces to this expression.
+            grad_error = lipschitz_constant / 6 ...
+                * sqrt(sum(gradient_step_sizes.^4));
+
+            if ~reference_grad_norm_initialized ...
+                    && use_gradient_reference_consistency
+                reference_candidate_reliable = ~isempty(previous_gradient) ...
+                    && isequal(xbase, previous_gradient_x) ...
+                    && (norm(grad - previous_gradient) ...
+                        / max([1, norm(grad), norm(previous_gradient)]) ...
+                        <= grad_reference_raw_tol);
+            end
+            if ~reference_grad_norm_initialized && reference_candidate_reliable ...
+                    && grad_error < max(1e-3, 1e-1 * norm(grad))
+                reference_grad_norm = norm(grad) + grad_error;
+                reference_grad_norm_initialized = true;
+            elseif reference_grad_norm_initialized
+                norm_grad_window = [norm_grad_window(2:end), norm(grad) + grad_error];
+            end
+
+            if reference_grad_norm_initialized ...
+                    && all((norm_grad_window ...
+                        < grad_tol * min(1, reference_grad_norm)) ...
+                    | (norm_grad_window < grad_reference_relative_tol ...
+                        * max(1, reference_grad_norm)))
+                terminate = true;
+                exitflag = 5;
+            end
+
+            if ~reference_grad_norm_initialized ...
+                    && use_gradient_reference_consistency
+                previous_gradient = grad;
+                previous_gradient_x = xbase;
+            end
+        end
+    end
+
+    if ~terminate && (nf >= maxfun || all(alpha_all < alpha_tol))
         terminate = true;
     end
     if terminate
@@ -203,7 +355,9 @@ for iter = 1:maxit
     end
 end
 
-if nf >= maxfun
+if exitflag == 4 || exitflag == 5
+    % Preserve a function-value or estimated-gradient stopping decision.
+elseif nf >= maxfun
     exitflag = 1;
 elseif all(alpha_all < alpha_tol)
     exitflag = 3;
@@ -224,6 +378,8 @@ nf = 0;
 fopt = fbase;
 xopt = xbase;
 fnew = fopt;
+function_values = nan(1, numel(direction_indices));
+sufficient_decrease = false;
 
 for j = 1:numel(direction_indices)
     if nf >= submaxfun
@@ -234,6 +390,7 @@ for j = 1:numel(direction_indices)
     xnew = xbase + alpha * D(:, di);
     fnew = fun(xnew);
     nf = nf + 1;
+    function_values(nf) = fnew;
     if fnew < fopt
         xopt = xnew;
         fopt = fnew;
@@ -242,7 +399,8 @@ for j = 1:numel(direction_indices)
         terminate = true;
         break;
     end
-    if fnew < fbase
+    sufficient_decrease = fnew < fbase;
+    if sufficient_decrease
         direction_indices(1:j) = direction_indices([j, 1:j-1]);
         break;
     end
@@ -257,6 +415,8 @@ end
 output.nf = nf;
 output.direction_indices = direction_indices;
 output.terminate = terminate;
+output.function_values = function_values(1:nf);
+output.sufficient_decrease = sufficient_decrease;
 end
 
 function [xbest, fbest, nf] = try_extrapolation(fun, xbase, fbase, direction, step, nf, maxfun)

@@ -150,14 +150,20 @@ validate_positive_real_scalar( ...
 % Set the threshold for the step sizes.
 options = set_default_if_missing(options, 'StepTolerance', ...
     get_accelerated_bds_default_constant("StepTolerance"));
-if isscalar(options.StepTolerance)
-    options.StepTolerance = options.StepTolerance * ones(options.num_blocks, 1);
-else
-    options.StepTolerance = options.StepTolerance(:);
-end
-if numel(options.StepTolerance) ~= options.num_blocks || any(options.StepTolerance < 0)
+if ~(isnumeric(options.StepTolerance) && isreal(options.StepTolerance) ...
+        && (isscalar(options.StepTolerance) ...
+        || (isvector(options.StepTolerance) ...
+        && numel(options.StepTolerance) == options.num_blocks)) ...
+        && all(isfinite(options.StepTolerance(:))) ...
+        && all(options.StepTolerance(:) >= 0))
     error('accelerated_bds_options:InvalidStepTolerance', ...
-        'options.StepTolerance must be a nonnegative scalar or a num_blocks-vector.');
+        ['options.StepTolerance must be a finite nonnegative real numeric ', ...
+        'scalar or a num_blocks-vector.']);
+end
+if isscalar(options.StepTolerance)
+    options.StepTolerance = double(options.StepTolerance) * ones(options.num_blocks, 1);
+else
+    options.StepTolerance = double(options.StepTolerance(:));
 end
 
 % Set the initial step sizes.
@@ -389,17 +395,25 @@ if ischarstr(alpha_init) && strcmpi(alpha_init, 'auto')
         error('accelerated_bds_options:InvalidAlphaInit', ...
             'options.alpha_init = "auto" is supported only when options.num_blocks equals n.');
     end
+    if any(~isfinite(x0))
+        error('accelerated_bds_options:InvalidX0', ...
+            'x0 must contain only finite values when options.alpha_init = "auto".');
+    end
     alpha_init = get_auto_alpha_init(x0, StepTolerance, 1, 1);
     return;
 end
-if isscalar(alpha_init)
-    alpha_init = alpha_init * ones(num_blocks, 1);
-else
-    alpha_init = alpha_init(:);
-end
-if numel(alpha_init) ~= num_blocks || any(alpha_init <= 0)
+if ~(isnumeric(alpha_init) && isreal(alpha_init) ...
+        && (isscalar(alpha_init) ...
+        || (isvector(alpha_init) && numel(alpha_init) == num_blocks)) ...
+        && all(isfinite(alpha_init(:))) && all(alpha_init(:) > 0))
     error('accelerated_bds_options:InvalidAlphaInit', ...
-        'options.alpha_init must be a positive scalar, a num_blocks-vector, or "auto".');
+        ['options.alpha_init must be a finite positive real numeric scalar, ', ...
+        'a num_blocks-vector, or "auto".']);
+end
+if isscalar(alpha_init)
+    alpha_init = double(alpha_init) * ones(num_blocks, 1);
+else
+    alpha_init = double(alpha_init(:));
 end
 end
 

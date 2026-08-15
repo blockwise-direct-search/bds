@@ -73,11 +73,9 @@ for j = 1 : num_directions
         end
     end
     
-    % Update the best point and the best function value. If fopt is nan, any non-nan fnew is better.
-    % Note: Although eval_fun replaces all potential NaN values with 1e30 to allow the algorithm to
-    % continue iterating, the condition (isnan(fopt) && ~isnan(fnew)) is retained as a safeguard.
-    % This defensive programming practice ensures robustness in case eval_fun's NaN handling is
-    % modified or edge cases are discovered in the future.
+    % Update the best point and function value. eval_fun currently maps a
+    % failed NaN evaluation to Inf for algorithmic comparisons; retain the NaN
+    % clause as a defensive safeguard in case that policy changes.
     if (fnew < fopt) || (isnan(fopt) && ~isnan(fnew))
         xopt = xnew;
         fopt = fnew;
@@ -90,9 +88,9 @@ for j = 1 : num_directions
         break;
     end
 
-    % Note that when fbase is nan, any non-nan fnew is considered to achieve sufficient decrease.
-    % Note: eval_fun already replaces all potential NaN values with 1e30 so the second clause below
-    % is not expected to trigger; it is retained as a defensive safeguard.
+    % If fbase is NaN, any non-NaN fnew is considered to achieve sufficient
+    % decrease. eval_fun currently maps failed NaN evaluations to Inf, so the
+    % second clause is a defensive safeguard.
     % This variable is used in two places:
     % 1. In opportunistic polling mode: to decide whether to cycle direction indices and stop 
     % polling.

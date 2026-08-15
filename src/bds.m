@@ -308,6 +308,7 @@ func_tol = options.func_tol;
 % nan values and return the same valid value repeatedly, leading to an incorrect
 % difference of 0, which is not the intended behavior.
 fopt_window = inf(1, func_window_size);
+reference_function_value = nan;
 
 use_estimated_gradient_stop = options.use_estimated_gradient_stop;
 grad_window_size = options.grad_window_size;
@@ -431,6 +432,13 @@ end
 % point and value within an iteration.
 xopt = x0;
 fopt = f0;
+
+% Fix the function-value stopping scale at the first finite incumbent. If the
+% initial evaluation fails, leave the reference uninitialized until the solver
+% first recovers a finite incumbent.
+if isfinite(fopt)
+    reference_function_value = fopt;
+end
 
 % Update fopt_window with the initial objective value. Although no iteration
 % has been performed yet, the initial evaluation at x0 is treated as the
@@ -595,12 +603,8 @@ for iter = 1:maxit
         % in the next block, meaning that reduction will be calculated with respect to xbase, as 
         % shown above. The condition must be checked before updating alpha_all(i_real) because the 
         % sufficient decrease is calculated based on the current step size.
-        % Although eval_fun replaces all potential NaN values with 1e30 to allow algorithm 
-        % iterations, and inner_direct_search also includes similar defensive checks when updating 
-        % fopt, we apply the same NaN safeguard here. This consistent defensive practice ensures 
-        % robustness: whenever a comparison involving fopt or fbase is performed, we account for 
-        % potential NaN values. This approach anticipates possible future modifications to eval_fun 
-        % or other unforeseen edge cases.
+        % eval_fun maps a failed NaN evaluation to Inf for algorithmic comparisons.
+        % Keep the NaN clauses as defensive safeguards in case that policy changes.
         update_base = (sub_fopt + reduction_factor(1) * forcing_function(alpha_all(i_real)) < fbase) ...
                     || (isnan(fbase) && ~isnan(sub_fopt));
         % Update the step size alpha_all according to the reduction achieved.
@@ -656,6 +660,10 @@ for iter = 1:maxit
         xopt = xopt_all(:, index);
     end
 
+    if isnan(reference_function_value) && isfinite(fopt)
+        reference_function_value = fopt;
+    end
+
     % Track the best function value observed among the latest func_window_size iterations.
     fopt_window = [fopt_window(2:end), fopt];
 
@@ -681,14 +689,15 @@ for iter = 1:maxit
     % over the last func_window_size iterations. If the change is below a specified threshold,
     % terminate the optimization. This check is performed after the current iteration is complete,
     % ensuring fopt_window includes the latest function value.
-    % Note that fopt - f0 is used instead of fopt to ensure translation invariance. This adjustment
-    % makes the stopping criterion depend on the relative change in the objective function,
-    % unaffected by constant shifts (e.g., f(x) -> f(x) + c). Such normalization ensures consistent
-    % behavior regardless of the function's translation.
-    if use_function_value_stop
+    % Scale the thresholds with the displacement from the first finite
+    % incumbent. This remains translation invariant even when the initial
+    % evaluation fails. The test stays inactive until both the reference and
+    % every entry of the sliding window are finite.
+    if use_function_value_stop && isfinite(reference_function_value) ...
+            && all(isfinite(fopt_window))
         func_change = max(fopt_window) - min(fopt_window);
-        if func_change < (func_tol * min(1, abs(fopt - f0))) || ...
-                func_change < (1e-3 * func_tol * max(1, abs(fopt - f0)))
+        if func_change < (func_tol * min(1, abs(fopt - reference_function_value))) || ...
+                func_change < (1e-3 * func_tol * max(1, abs(fopt - reference_function_value)))
             terminate = true;
             exitflag = get_exitflag("SMALL_OBJECTIVE_CHANGE");
         end
@@ -699,11 +708,11 @@ for iter = 1:maxit
         grad_info.sampled_direction_indices_per_batch = sampled_direction_indices_per_batch;
         grad_info.function_values_per_batch = function_values_per_batch;
         grad = estimate_gradient(grad_info);
-        % If the norm of the estimated gradient exceeds the threshold (1e30), it is discarded.
-        % This threshold is chosen to maintain consistency with the standard used in eval_fun.m.
-        % Additionally, we check for nan values to ensure the gradient is valid. The first verification
-        % can cover both cases. The second verification is to avoid the length of grad is too short.
-        if (norm(grad) <= sqrt(n)*1e30) && (norm(grad) > 10*sqrt(n)*eps)
+        % A gradient estimate is available exactly when estimate_gradient returns
+        % the documented n-by-1 real vector with finite components. Magnitude is
+        % not a validity condition: zero and very small estimates are essential
+        % for detecting stationarity, and large finite estimates remain valid.
+        if isrealcolumn(grad) && numel(grad) == n && all(isfinite(grad))
             % Record the estimated gradient in grad_hist.
             grad_hist = [grad_hist, grad];
             % Record the corresponding xbase in grad_xhist. As long as all batches do not achieve

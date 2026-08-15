@@ -7,7 +7,12 @@ history is the archive for that process.
 
 ## Current role
 
-- `lean_evolved_bds.m` is the fixed historical reference for accelerated BDS.
+- `lean_evolved_bds.m` is the active lean reference for accelerated BDS. Its
+  optional third argument enables focused function-value and estimated-gradient
+  stopping comparisons; the default two-argument behavior remains unchanged.
+- `lean_evolved_bds_original.m` is the snapshot immediately before the
+  first-finite function-value reference was added. The older pre-momentum-
+  deduplication behavior remains in `misc/lean_evolved_bds_legacy.m`.
 - `accelerated_bds_options.m` is the configurable experimental solver. It does
   not call `src/bds.m` directly or indirectly.
 - The following acceleration mechanisms currently belong only to
@@ -70,11 +75,25 @@ Changes that touch gradient stopping or evaluation bookkeeping must also run:
 ```matlab
 addpath("tests");
 verify_gradient_stop_no_extra_evaluations
+verify_gradient_estimate_validity
 ```
 
-The focused check verifies that the estimated-gradient stop is activated,
-that its finalized defaults match the corresponding explicit options, and that
-the recorded function count and histories include every objective evaluation.
+These focused checks verify that the estimated-gradient stop is activated,
+that its finalized defaults match the corresponding explicit options, that
+zero and every other structurally valid finite estimate remain available while
+`NaN` and `Inf` are rejected, and that the recorded function count and
+histories include every objective evaluation.
+
+Changes to recent-function-value stopping must also run:
+
+```matlab
+addpath("tests");
+verify_function_value_reference
+```
+
+This check covers failed-initial-evaluation recovery, the fixed first-finite
+reference, translation invariance, finite initial values, a nontriggering lean
+snapshot comparison, and acceleration-off/on equivalence.
 
 ## Related active documents
 
@@ -85,4 +104,3 @@ the recorded function count and histories include every objective evaluation.
 - `ACCELERATED_BDS_MAIN_FUNCTION_DEFERRED_REVIEW.md` records main-function
   cleanup candidates intentionally deferred until the final solver structure
   is clear.
-
