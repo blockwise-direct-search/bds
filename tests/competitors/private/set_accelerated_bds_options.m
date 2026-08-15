@@ -110,42 +110,41 @@ if ~isrealscalar(options.ftarget)
 end
 options = set_default_if_missing(options, 'use_function_value_stop', ...
     get_accelerated_bds_default_constant("use_function_value_stop"));
-options.use_function_value_stop = normalize_logical_scalar( ...
+validate_logical_scalar( ...
     options.use_function_value_stop, 'use_function_value_stop');
 options = set_default_if_missing(options, 'func_window_size', ...
     get_accelerated_bds_default_constant("func_window_size"));
 options.func_window_size = normalize_positive_integer(options.func_window_size, 'func_window_size');
 options = set_default_if_missing(options, 'func_tol', get_accelerated_bds_default_constant("func_tol"));
-options.func_tol = normalize_positive_real_scalar(options.func_tol, 'func_tol');
+validate_positive_real_scalar(options.func_tol, 'func_tol');
 options = set_default_if_missing(options, 'use_estimated_gradient_stop', ...
     get_accelerated_bds_default_constant("use_estimated_gradient_stop"));
-options.use_estimated_gradient_stop = normalize_logical_scalar( ...
+validate_logical_scalar( ...
     options.use_estimated_gradient_stop, 'use_estimated_gradient_stop');
 options = set_default_if_missing(options, 'grad_window_size', ...
     get_accelerated_bds_default_constant("grad_window_size"));
 options.grad_window_size = normalize_positive_integer(options.grad_window_size, 'grad_window_size');
 options = set_default_if_missing(options, 'grad_tol', get_accelerated_bds_default_constant("grad_tol"));
-options.grad_tol = normalize_positive_real_scalar(options.grad_tol, 'grad_tol');
+validate_positive_real_scalar(options.grad_tol, 'grad_tol');
 options = set_default_if_missing(options, 'lipschitz_constant', ...
     get_accelerated_bds_default_constant("lipschitz_constant"));
-options.lipschitz_constant = normalize_positive_real_scalar( ...
+validate_positive_real_scalar( ...
     options.lipschitz_constant, 'lipschitz_constant');
 options = set_default_if_missing(options, 'use_gradient_reference_consistency', ...
     get_accelerated_bds_default_constant("use_gradient_reference_consistency"));
-options.use_gradient_reference_consistency = normalize_logical_scalar( ...
+validate_logical_scalar( ...
     options.use_gradient_reference_consistency, ...
     'use_gradient_reference_consistency');
 options = set_default_if_missing(options, ...
     'grad_reference_finite_difference_error_tol', ...
     get_accelerated_bds_default_constant( ...
     "grad_reference_finite_difference_error_tol"));
-options.grad_reference_finite_difference_error_tol = ...
-    normalize_positive_real_scalar( ...
+validate_positive_real_scalar( ...
     options.grad_reference_finite_difference_error_tol, ...
     'grad_reference_finite_difference_error_tol');
 options = set_default_if_missing(options, 'grad_reference_relative_tol', ...
     get_accelerated_bds_default_constant("grad_reference_relative_tol"));
-options.grad_reference_relative_tol = normalize_positive_real_scalar( ...
+validate_positive_real_scalar( ...
     options.grad_reference_relative_tol, 'grad_reference_relative_tol');
 
 % Set the threshold for the step sizes.
@@ -169,7 +168,7 @@ options.alpha_init = normalize_alpha_init(options.alpha_init, options.num_blocks
 % Set the expanding and shrinking factors.
 options = set_default_if_missing(options, 'is_noisy', ...
     get_accelerated_bds_default_constant("is_noisy"));
-options.is_noisy = normalize_logical_scalar(options.is_noisy, 'is_noisy');
+validate_logical_scalar(options.is_noisy, 'is_noisy');
 if options.is_noisy
     options = set_default_if_missing(options, 'expand', ...
         get_accelerated_bds_default_constant("expand_noisy"));
@@ -190,9 +189,28 @@ if ~(isrealscalar(options.shrink) && options.shrink > 0 && options.shrink < 1)
         'options.shrink must be a real scalar in (0, 1).');
 end
 
-% Two estimates at the same base point use h and shrink*h. The leading error
-% of a central difference is O(h^2), so the consistency threshold should be
-% adjusted when the user changes shrink. The default gives 0.1 when shrink=0.5.
+% Let theta = options.shrink. For a fixed polling direction, denote by D_h and
+% D_{theta*h} the central-difference estimates obtained with step sizes h and
+% theta*h. Their leading truncation errors satisfy
+%
+%   D_h         = D + c*h^2         + O(h^4),
+%   D_{theta*h} = D + c*theta^2*h^2 + O(h^4).
+%
+% Hence, D_h - D_{theta*h} has leading term c*(1-theta^2)*h^2, whereas the
+% leading error of the finer estimate D_{theta*h} is c*theta^2*h^2. The error
+% of the finer estimate is therefore approximated by
+%
+%   theta^2/(1-theta^2) * abs(D_h - D_{theta*h}).
+%
+% Consequently, if grad_reference_finite_difference_error_tol bounds the
+% relative error of the finer estimate, the corresponding raw threshold for
+% the relative difference between the two estimates is
+%
+%   grad_reference_finite_difference_error_tol * (1-theta^2)/theta^2.
+%
+% This is a leading-order calibration for reconstructed gradients, not an
+% exact error identity. With theta=0.5 and the default tolerance 1/30, the
+% resulting grad_reference_raw_tol is 0.1.
 options.grad_reference_raw_tol = ...
     options.grad_reference_finite_difference_error_tol ...
     * (1 - options.shrink^2) / options.shrink^2;
@@ -200,7 +218,20 @@ options.grad_reference_raw_tol = ...
 % Set the remaining polling and randomization options.
 options = set_default_if_missing(options, 'forcing_function', ...
     get_accelerated_bds_default_constant("forcing_function"));
-options.forcing_function = normalize_forcing_function(options.forcing_function);
+if ~isa(options.forcing_function, 'function_handle')
+    error('accelerated_bds_options:InvalidForcingFunction', ...
+        'options.forcing_function must be a function handle.');
+end
+try
+    forcing_function_test_output = options.forcing_function(1);
+catch
+    error('accelerated_bds_options:InvalidForcingFunction', ...
+        'options.forcing_function must accept scalar input.');
+end
+if ~isscalar(forcing_function_test_output)
+    error('accelerated_bds_options:InvalidForcingFunction', ...
+        'options.forcing_function must return a scalar for scalar input.');
+end
 options = set_default_if_missing(options, 'reduction_factor', ...
     get_accelerated_bds_default_constant("reduction_factor"));
 if ~(isnumvec(options.reduction_factor) && numel(options.reduction_factor) == 3)
@@ -245,7 +276,7 @@ end
 % Set the output and debugging options.
 options = set_default_if_missing(options, 'output_xhist', ...
     get_accelerated_bds_default_constant("output_xhist"));
-options.output_xhist = normalize_logical_scalar(options.output_xhist, 'output_xhist');
+validate_logical_scalar(options.output_xhist, 'output_xhist');
 if options.output_xhist
     try
         xhist_allocation_test = nan(n, options.MaxFunctionEvaluations);
@@ -258,7 +289,7 @@ if options.output_xhist
 end
 options = set_default_if_missing(options, 'output_alpha_hist', ...
     get_accelerated_bds_default_constant("output_alpha_hist"));
-options.output_alpha_hist = normalize_logical_scalar(options.output_alpha_hist, 'output_alpha_hist');
+validate_logical_scalar(options.output_alpha_hist, 'output_alpha_hist');
 if options.output_alpha_hist
     try
         alpha_hist_allocation_test = nan(options.num_blocks, options.MaxFunctionEvaluations);
@@ -271,10 +302,10 @@ if options.output_alpha_hist
 end
 options = set_default_if_missing(options, 'output_block_hist', ...
     get_accelerated_bds_default_constant("output_block_hist"));
-options.output_block_hist = normalize_logical_scalar(options.output_block_hist, 'output_block_hist');
+validate_logical_scalar(options.output_block_hist, 'output_block_hist');
 options = set_default_if_missing(options, 'output_grad_hist', ...
     get_accelerated_bds_default_constant("output_grad_hist"));
-options.output_grad_hist = normalize_logical_scalar(options.output_grad_hist, 'output_grad_hist');
+validate_logical_scalar(options.output_grad_hist, 'output_grad_hist');
 options = set_default_if_missing(options, 'iprint', ...
     get_accelerated_bds_default_constant("iprint"));
 if ~(isintegerscalar(options.iprint) && options.iprint >= 0 && options.iprint <= 3)
@@ -284,26 +315,32 @@ end
 options.iprint = double(options.iprint);
 options = set_default_if_missing(options, 'debug_flag', ...
     get_accelerated_bds_default_constant("debug_flag"));
-options.debug_flag = normalize_logical_scalar(options.debug_flag, 'debug_flag');
+validate_logical_scalar(options.debug_flag, 'debug_flag');
 
 % Set the acceleration options.
-options = set_default_if_missing(options, 'productive_direction_memory_size', max(1, min(n, 5)));
+options = set_default_if_missing(options, 'productive_direction_memory_size', ...
+    max(1, min(n, get_accelerated_bds_default_constant( ...
+    "productive_direction_memory_size_cap"))));
 options.productive_direction_memory_size = normalize_positive_integer( ...
     options.productive_direction_memory_size, 'productive_direction_memory_size');
-options = set_default_if_missing(options, 'momentum_decay', 0.6);
+options = set_default_if_missing(options, 'momentum_decay', ...
+    get_accelerated_bds_default_constant("momentum_decay"));
 if ~(isrealscalar(options.momentum_decay) ...
         && options.momentum_decay >= 0 && options.momentum_decay < 1)
     error('accelerated_bds_options:InvalidMomentumDecay', ...
         'options.momentum_decay must be a real scalar in [0, 1).');
 end
-options = set_default_if_missing(options, 'use_productive_direction_memory', true);
-options.use_productive_direction_memory = normalize_logical_scalar( ...
+options = set_default_if_missing(options, 'use_productive_direction_memory', ...
+    get_accelerated_bds_default_constant("use_productive_direction_memory"));
+validate_logical_scalar( ...
     options.use_productive_direction_memory, 'use_productive_direction_memory');
-options = set_default_if_missing(options, 'use_iteration_pattern_step', true);
-options.use_iteration_pattern_step = normalize_logical_scalar( ...
+options = set_default_if_missing(options, 'use_iteration_pattern_step', ...
+    get_accelerated_bds_default_constant("use_iteration_pattern_step"));
+validate_logical_scalar( ...
     options.use_iteration_pattern_step, 'use_iteration_pattern_step');
-options = set_default_if_missing(options, 'use_momentum_extrapolation', true);
-options.use_momentum_extrapolation = normalize_logical_scalar( ...
+options = set_default_if_missing(options, 'use_momentum_extrapolation', ...
+    get_accelerated_bds_default_constant("use_momentum_extrapolation"));
+validate_logical_scalar( ...
     options.use_momentum_extrapolation, 'use_momentum_extrapolation');
 end
 
@@ -366,27 +403,10 @@ if numel(alpha_init) ~= num_blocks || any(alpha_init <= 0)
 end
 end
 
-function value = normalize_logical_scalar(value, name)
+function validate_logical_scalar(value, name)
 if ~(islogical(value) && isscalar(value))
     error('accelerated_bds_options:InvalidLogicalOption', ...
         'options.%s must be a logical scalar.', name);
-end
-end
-
-function forcing_function = normalize_forcing_function(forcing_function)
-if ~isa(forcing_function, 'function_handle')
-    error('accelerated_bds_options:InvalidForcingFunction', ...
-        'options.forcing_function must be a function handle.');
-end
-try
-    test_output = forcing_function(1);
-catch
-    error('accelerated_bds_options:InvalidForcingFunction', ...
-        'options.forcing_function must accept scalar input.');
-end
-if ~isscalar(test_output)
-    error('accelerated_bds_options:InvalidForcingFunction', ...
-        'options.forcing_function must return a scalar for scalar input.');
 end
 end
 
@@ -398,7 +418,7 @@ end
 value = double(value);
 end
 
-function value = normalize_positive_real_scalar(value, name)
+function validate_positive_real_scalar(value, name)
 if ~(isrealscalar(value) && value > 0)
     error('accelerated_bds_options:InvalidPositiveRealOption', ...
         'options.%s must be a positive real scalar.', name);

@@ -68,6 +68,16 @@ switch constant_name
         constant_value = 0;
     case "debug_flag"
         constant_value = false;
+    case "productive_direction_memory_size_cap"
+        constant_value = 5;
+    case "momentum_decay"
+        constant_value = 0.6;
+    case "use_productive_direction_memory"
+        constant_value = true;
+    case "use_iteration_pattern_step"
+        constant_value = true;
+    case "use_momentum_extrapolation"
+        constant_value = true;
     otherwise
         error("Unknown accelerated BDS constant name '%s'.", constant_name);
 end
