@@ -2,6 +2,12 @@
 
 Status: completed. All staged and final behavioral checks passed.
 
+Historical note: this file records an earlier completed interface migration.
+The later single-threshold migration removed `grad_reference_relative_tol` in
+favor of the sole reference-scaled `grad_tol`; see
+`../GRADIENT_STOPPING_SINGLE_THRESHOLD_MIGRATION.md`. The terminology below is
+retained as migration history rather than current interface documentation.
+
 ## Objective
 
 Remove the historical compatibility options

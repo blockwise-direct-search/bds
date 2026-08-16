@@ -9,15 +9,16 @@
 options.use_function_value_stop = false;
 options.use_estimated_gradient_stop = true;
 options.grad_window_size = 1;
-options.grad_tol = 1e-6;
+options.grad_tol = 1e-2;
 options.use_gradient_reference_consistency = true;
 options.grad_reference_finite_difference_error_tol = 1/30;
-options.grad_reference_relative_tol = 1e-2;
 ```
 
-最后两个 gradient parameters 的算法语义是：先要求同一 `xbase` 上两个连续 gradient
+最后两个 reference parameters 的算法语义是：先要求同一 `xbase` 上两个连续 gradient
 estimates 的 relative difference 不超过 `0.1`，才允许初始化 reliable reference；随后
-使用 reference-relative tolerance `rho=1e-2`。正式 solver option 直接表达 `rho`。
+每个 window entry `G` 必须满足
+`G < grad_tol*max(1,reliable_reference_grad_norm)`。因此 `grad_tol=1e-2` 在 reference
+不超过 1 时是 absolute tolerance，在 reference 大于 1 时是 relative tolerance。
 
 该 pure-gradient strategy 在 solver 内不增加任何 function evaluation。它只复用正常
 polling 已经得到的 points 与 function values；true gradient 仅用于离线 failure diagnosis。
@@ -95,8 +96,9 @@ formal boundary run 给出：
 
 固定 `rho=0.01` 时，`consistency_tol=0.1` 与 `0.3` 结果完全相同，而 `0.5`
 丢失一个 problem；因此取安全平台左端点 `0.1`。`grad_window_size=1` 比更大的 windows
-有更多安全 activation，`grad_tol=1e-6` 保持原有 tolerance 语义，不再作为 performance
-parameter 调整。
+有更多安全 activation。历史配置中的 `grad_tol=1e-6` 对最终判断没有作用，因为
+`rho=1e-2` 的 `max` threshold 对每个非负 reference 都严格更大；当前接口将有效的
+`rho=1e-2` 直接记为唯一的 `grad_tol=1e-2`。
 
 ## 为什么原 criterion 会失败
 

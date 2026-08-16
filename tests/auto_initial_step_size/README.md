@@ -46,10 +46,9 @@ final pure-gradient 推荐：
 options.use_function_value_stop = false;
 options.use_estimated_gradient_stop = true;
 options.grad_window_size = 1;
-options.grad_tol = 1e-6;
+options.grad_tol = 1e-2;
 options.use_gradient_reference_consistency = true;
 options.grad_reference_finite_difference_error_tol = 1/30;
-options.grad_reference_relative_tol = 1e-2;
 ```
 
 function-only 在 `plain` 和 `linearly_transformed` 的五个 output-based targets 上均保持

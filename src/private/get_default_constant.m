@@ -17,9 +17,13 @@ switch constant_name
     case "grad_window_size"
         constant_value = 1;
     case "grad_tol"
-        constant_value = 1e-6;
+        constant_value = 1e-2;
     case "lipschitz_constant"
         constant_value = 1e3;
+    case "use_gradient_reference_consistency"
+        constant_value = true;
+    case "grad_reference_finite_difference_error_tol"
+        constant_value = 1/30;
     case "block_visiting_pattern"
         constant_value = "sorted";
     case "alpha_init"

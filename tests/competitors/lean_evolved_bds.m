@@ -11,17 +11,21 @@ function [xopt, fopt, exitflag, output] = lean_evolved_bds(fun, x0, termination_
 if nargin < 3
     termination_options = struct();
 end
+if isfield(termination_options, 'grad_reference_relative_tol')
+    error('lean_evolved_bds:RemovedGradientReferenceRelativeTolerance', ...
+        ['termination_options.grad_reference_relative_tol has been removed; ', ...
+        'use termination_options.grad_tol.']);
+end
 
 use_function_value_stop = false;
 func_window_size = 20;
 func_tol = 1e-6;
 use_estimated_gradient_stop = false;
 grad_window_size = 1;
-grad_tol = 1e-6;
+grad_tol = 1e-2;
 lipschitz_constant = 1e3;
 use_gradient_reference_consistency = true;
 grad_reference_finite_difference_error_tol = 1/30;
-grad_reference_relative_tol = 1e-2;
 if isfield(termination_options, 'use_function_value_stop')
     use_function_value_stop = termination_options.use_function_value_stop;
 end
@@ -50,10 +54,6 @@ end
 if isfield(termination_options, 'grad_reference_finite_difference_error_tol')
     grad_reference_finite_difference_error_tol = ...
         termination_options.grad_reference_finite_difference_error_tol;
-end
-if isfield(termination_options, 'grad_reference_relative_tol')
-    grad_reference_relative_tol = ...
-        termination_options.grad_reference_relative_tol;
 end
 fopt_window = inf(1, func_window_size);
 reference_function_value = nan;
@@ -331,10 +331,8 @@ for iter = 1:maxit
             end
 
             if reference_grad_norm_initialized ...
-                    && all((norm_grad_window ...
-                        < grad_tol * min(1, reference_grad_norm)) ...
-                    | (norm_grad_window < grad_reference_relative_tol ...
-                        * max(1, reference_grad_norm)))
+                    && all(norm_grad_window ...
+                        < grad_tol * max(1, reference_grad_norm))
                 terminate = true;
                 exitflag = 5;
             end

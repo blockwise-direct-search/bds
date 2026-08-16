@@ -182,11 +182,19 @@ constant_value = 1;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "grad_tol";
-constant_value = 1e-6;
+constant_value = 1e-2;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "lipschitz_constant";
 constant_value = 1e3;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
+constant_name = "use_gradient_reference_consistency";
+constant_value = true;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
+constant_name = "grad_reference_finite_difference_error_tol";
+constant_value = 1/30;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "block_visiting_pattern";

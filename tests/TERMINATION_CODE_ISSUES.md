@@ -76,57 +76,61 @@ snapshot.
 The implementation now agrees with the manuscript definition of `F_ref` as the
 first finite incumbent value.
 
-## 3. One estimated gradient stopping threshold is redundant
+## 3. Resolved: use one reference-scaled estimated-gradient threshold
 
-### Current behavior
+### Resolution
 
-The solver stops when every value in the gradient window satisfies at least one
-of
+`bds.m`, `accelerated_bds_options.m`, and the active lean reference now stop
+when every conservative gradient norm `G` in the window satisfies
 
 ```text
-G < omega_g min(1, G_ref)
-G < nu_g    max(1, G_ref).
+G < grad_tol * max(1, G_ref).
 ```
 
-The reference experimental configuration uses
-`omega_g = 1e-6` and `nu_g = 1e-2`. For every positive `G_ref`,
+The public `grad_tol` default is `1e-2`. When `G_ref <= 1`, the right-hand side
+is the absolute threshold `grad_tol`; when `G_ref > 1`, the condition is the
+relative reduction test `G/G_ref < grad_tol`. The former
+`grad_reference_relative_tol` option has been removed.
+
+### Why the gradient and function-value scales differ
+
+The function-value scale `abs(fopt - F_ref)` is zero when `F_ref` is
+initialized and then changes throughout the run, so its guarded `min/max`
+construction protects a scale that starts at zero and may later become very
+large. The gradient reference is different: it is initialized only when a
+structurally valid gradient estimate passes the consistency and computed-error
+checks, and it is then fixed. The single `max(1, G_ref)` normalization therefore
+provides both required regimes without a complementary `min` branch.
+
+The condition expresses reference-scaled stationarity. The relative branch
+does not claim that the current gradient is small in an unscaled absolute
+sense.
+
+### Historical-result equivalence
+
+The reported accelerated experiments used `omega_g=1e-6` and `nu_g=1e-2` in
+the former two-branch condition. For every nonnegative `G_ref`,
 
 ```text
 omega_g min(1, G_ref) < nu_g max(1, G_ref).
 ```
 
-The first condition is therefore always contained in the second and never
-changes the stopping decision in the reported configuration.
+The first condition was therefore strictly contained in the second for every
+window entry. The new `grad_tol=1e-2` rule is pointwise identical to the
+reported configuration, so the benchmark does not need to be rerun.
 
-### Why this matters
-
-The interface and manuscript present two complementary thresholds, but the
-reported parameter values implement only the second one. A reviewer may
-reasonably ask why the additional parameter and branch exist.
-
-### Design decision required
-
-Choose one of the following directions before changing the implementation.
-
-1. Replace the two branches by the single threshold that represents the
-   intended absolute or relative stopping rule.
-2. Redesign the two threshold formulas so that they express distinct absolute
-   and reference relative criteria.
-3. Retain the formulas but choose and justify parameter values for which both
-   branches can affect the decision.
-
-### Tests to add
+### Regression coverage
 
 - Boundary tests cover `G_ref < 1`, `G_ref = 1`, and `G_ref > 1`.
-- Each retained branch has at least one test case in which it alone determines
-  the stopping decision.
 - Strict inequality behavior is tested at each threshold.
-- The code and the mathematical condition in the manuscript are verified to be
-  equivalent for a window containing more than one estimate.
+- A window containing more than one estimate verifies that every entry must be
+  below the threshold.
+- Acceleration-off cases compare with `bds.m`; an acceleration-on triggering
+  case compares with the lean reference.
+- The removed option is rejected by all three entry paths.
 
 ### Manuscript synchronization
 
-Once the design is chosen, update the stopping formula, its explanation, the
-parameter table, and the experimental wrapper as one change. Existing profile
-data must not be described as using a revised rule unless the experiments are
-rerun or equivalence with the historical rule is established.
+The manuscript formula and parameter table should use the single condition and
+`grad_tol=1e-2`. Historical profile data must be described through the exact
+equivalence above, not as having been rerun with a different algorithm.

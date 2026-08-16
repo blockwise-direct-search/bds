@@ -166,13 +166,13 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               whether the estimated gradient has changed significantly.
 %                               It should be a positive integer. 
 %                               Default: 1.
-%   grad_tol                    Tolerance for the estimated gradient norm. The algorithm checks 
-%                               whether the norm of the estimated gradient over the last 
-%                               grad_window_size iterations falls within the range 
-%                               [grad_tol * 1e-3, grad_tol]. If the norm is smaller than this 
-%                               range, the algorithm terminates.
+%   grad_tol                    Tolerance for the reference-scaled estimated gradient norm. After
+%                               a reliable reference norm G_ref has been initialized, every value
+%                               G in the gradient window must satisfy
+%                               G < grad_tol * max(1, G_ref). Thus grad_tol is an absolute
+%                               tolerance when G_ref <= 1 and a relative tolerance when G_ref > 1.
 %                               It should be a positive number. 
-%                               Default: 1e-6.
+%                               Default: 1e-2.
 %   lipschitz_constant          An estimate of the Lipschitz constant of the objective function.
 %                               This parameter is utilized to compute the gradient error bound
 %                               when the option use_estimated_gradient_stop is true.
@@ -181,6 +181,15 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               error bound.
 %                               The value must be a positive scalar.
 %                               Default: 1e3.
+%   use_gradient_reference_consistency
+%                               Whether two gradient estimates computed at the same base point
+%                               must be consistent before initializing the fixed gradient
+%                               reference scale. The check reuses ordinary polling evaluations.
+%                               Default: true.
+%   grad_reference_finite_difference_error_tol
+%                               Relative finite-difference error tolerance used to calibrate the
+%                               consistency threshold for the two reference candidates.
+%                               Default: 1/30.
 %
 %   The following options are related to output and debugging.
 %   output_xhist                Whether to output the history of points visited.
@@ -316,7 +325,10 @@ grad_tol = options.grad_tol;
 % Initialize with nan to disable the stopping test until the window is fully replaced with
 % valid gradient norms.
 norm_grad_window = nan(1, grad_window_size);
-record_gradient_norm = false;
+reference_grad_norm_initialized = false;
+reference_candidate_reliable = ~options.use_gradient_reference_consistency;
+previous_gradient = [];
+previous_gradient_x = [];
 
 lipschitz_constant = options.lipschitz_constant;
 
@@ -743,39 +755,40 @@ for iter = 1:maxit
                                                     direction_selection_probability_matrix, ...
                                                     lipschitz_constant);
 
-                % Set up the reference gradient norm for the stopping criterion.
-                %
-                % Recording of norm_grad_window starts only after the first gradient estimate
-                % with sufficiently small estimation error is obtained. From this point on,
-                % gradient estimates are considered reliable for termination checks.
-                %
-                % For robustness against estimation error, both the entries stored in
-                % norm_grad_window and the reference value reference_grad_norm are defined as
-                % conservative upper bounds of the true gradient norm, namely
-                %   norm(grad) + grad_error.
-                % The reference value is fixed once at initialization and is used solely to
-                % set the scale of the stopping thresholds, ensuring consistent and robust
-                % scaling in the presence of estimation uncertainty.
-                if ~record_gradient_norm
-                    if grad_error < max(1e-3, 1e-1 * norm(grad))
-                        reference_grad_norm = norm(grad);
-                        record_gradient_norm = true;
-                    end
-                else
+                % Before initialization, a consistency-qualified estimate with a sufficiently
+                % small computed error establishes the fixed reference scale. After
+                % initialization, each new estimate is appended to the window as the same kind
+                % of conservative upper bound, norm(grad) + grad_error.
+                if ~reference_grad_norm_initialized ...
+                        && options.use_gradient_reference_consistency
+                    reference_candidate_reliable = ~isempty(previous_gradient) ...
+                        && isequal(xbase, previous_gradient_x) ...
+                        && (norm(grad - previous_gradient) / ...
+                            max([1, norm(grad), norm(previous_gradient)]) ...
+                            <= options.grad_reference_raw_tol);
+                end
+                if ~reference_grad_norm_initialized && reference_candidate_reliable ...
+                        && grad_error < max(1e-3, 1e-1 * norm(grad))
+                    reference_grad_norm = norm(grad) + grad_error;
+                    reference_grad_norm_initialized = true;
+                elseif reference_grad_norm_initialized
                     norm_grad_window = [norm_grad_window(2:end), norm(grad) + grad_error];
                 end
 
-                % Stopping test over the sliding window.
-                % Two natural aggregations are possible:
-                %   (i) all(x < T1) || all(x < T2)  : requires the entire window to satisfy
-                %       a single threshold (uniform criterion).
-                %   (ii) all((x < T1) | (x < T2))   : requires each entry to satisfy at least
-                %       one of the thresholds (pointwise criterion).
-                % These are not equivalent in general. We adopt the pointwise form as suggested.
-                if record_gradient_norm && all((norm_grad_window < grad_tol * min(1, reference_grad_norm)) ...
-                        | (norm_grad_window < 1e-3 * grad_tol * max(1, reference_grad_norm)))
+                % The fixed reliable reference can appear well after iteration zero.
+                % max(1, reference_grad_norm) supplies an absolute scale for a small reference
+                % and a relative scale for a large reference.
+                if reference_grad_norm_initialized ...
+                        && all(norm_grad_window ...
+                            < grad_tol * max(1, reference_grad_norm))
                     terminate = true;
                     exitflag = get_exitflag("SMALL_ESTIMATE_GRADIENT");
+                end
+
+                if ~reference_grad_norm_initialized ...
+                        && options.use_gradient_reference_consistency
+                    previous_gradient = grad;
+                    previous_gradient_x = xbase;
                 end
 
             end

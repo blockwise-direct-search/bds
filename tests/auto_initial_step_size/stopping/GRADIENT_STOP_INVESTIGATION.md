@@ -196,7 +196,7 @@ targets，而 `rho=1.15e-2` 在 `235` 停止并失败。这给出了真实 solve
 | `0.5` | `121/122` | `37832` | `26` |
 
 因此 `0.1` 是安全平台 `{0.1,0.3}` 的左端点；更小的 values 少一次有效 activation，
-`0.5` 已越界。最终 pure-gradient strategy 唯一锁定为：
+`0.5` 已越界。下面保留当时运行实验所用的历史参数表示：
 
 ```text
 grad_window_size = 1
@@ -205,11 +205,12 @@ grad_reference_finite_difference_error_tol = 1/30
 reference-relative tolerance rho = 1e-2
 ```
 
-历史实验代码中 `rho=1e-2` 等价于
-`grad_reference_relative_tol=1e-2`。正式 solver option 使用
-直接输入 `grad_reference_relative_tol=1e-2`；reference threshold 是
-`rho*max(1,reliable_reference_grad_norm)`。`10000` 只保留为历史 label 的兼容
-encoding，不是 problem-dependent constant。
+历史实验代码中 `rho=1e-2` 等价于当时的
+`grad_reference_relative_tol=1e-2`；reference threshold 是
+`rho*max(1,reliable_reference_grad_norm)`。由于该 threshold 在最终参数下严格包含
+`grad_tol=1e-6` 的 `min` threshold，当前完全等价的正式接口只使用
+`grad_tol=1e-2`。`10000` 只保留为历史 solver-name label 的解析 encoding，不是
+problem-dependent constant，也不是当前 solver option。
 
 ## Stage 4 close
 

@@ -310,10 +310,13 @@ function [xopt, fopt, exitflag, output] = accelerated_bds_options(fun, x0, optio
 %   grad_window_size                             Number of estimated gradients used for the gradient
 %                                                stopping test. It should be a positive integer.
 %                                                Default: 1.
-%   grad_tol                                     Tolerance for the estimated gradient norm. The norms
-%                                                over the last grad_window_size estimates are compared
-%                                                with [grad_tol * 1e-3, grad_tol].
-%                                                Default: 1e-6.
+%   grad_tol                                     Tolerance for the reference-scaled estimated gradient
+%                                                norm. After a reliable reference norm G_ref has been
+%                                                initialized, every value G in the gradient window must
+%                                                satisfy G < grad_tol * max(1, G_ref). Thus grad_tol is
+%                                                an absolute tolerance when G_ref <= 1 and a relative
+%                                                tolerance when G_ref > 1.
+%                                                Default: 1e-2.
 %   lipschitz_constant                           Estimate of the objective function's Lipschitz constant.
 %                                                It is used to compute the gradient error bound when
 %                                                use_estimated_gradient_stop is true. The value must be
@@ -378,20 +381,6 @@ function [xopt, fopt, exitflag, output] = accelerated_bds_options(fun, x0, optio
 %                                                shrink=0.5, the default value gives
 %                                                grad_reference_raw_tol = 0.1.
 %                                                Default: 1/30.
-%   grad_reference_relative_tol                  Tolerance rho for the reference-based gradient stopping
-%                                                threshold. After the reliable reference gradient norm has
-%                                                been initialized and stored in reference_grad_norm, the
-%                                                solver sets T_ref = rho * max(1, reference_grad_norm).
-%                                                For each entry in the gradient stopping window, it forms
-%                                                G = norm(grad) + grad_error. The gradient stopping test
-%                                                is satisfied only when every window entry satisfies at
-%                                                least one of G < T_ref and G < T_grad, where
-%                                                T_grad = grad_tol * min(1, reference_grad_norm).
-%                                                The parameter rho changes only T_ref. It does not change
-%                                                the consistency check used to initialize
-%                                                reference_grad_norm, the gradient error bound, the
-%                                                gradient window, or the second threshold T_grad.
-%                                                Default: 1e-2.
 %   The following options control solver output and diagnostic information.
 %   output_xhist                          Whether to output the history of points visited.
 %                                         Default: false.
@@ -1098,12 +1087,12 @@ for iter = 1:maxit
                     norm_grad_window = [norm_grad_window(2:end), norm(grad) + grad_error];
                 end
 
-                % Core gradient-stopping decision. Every value in the window must satisfy at
-                % least one of the relative and absolute thresholds.
+                % The fixed reliable reference can appear well after iteration zero.
+                % max(1, reference_grad_norm) supplies an absolute scale for a small reference
+                % and a relative scale for a large reference.
                 if reference_grad_norm_initialized ...
-                    && all((norm_grad_window < grad_tol * min(1, reference_grad_norm)) ...
-                        | (norm_grad_window < options.grad_reference_relative_tol ...
-                            * max(1, reference_grad_norm)))
+                        && all(norm_grad_window ...
+                            < grad_tol * max(1, reference_grad_norm))
                     terminate = true;
                     exitflag = get_exitflag("SMALL_ESTIMATE_GRADIENT");
                 end

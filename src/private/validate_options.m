@@ -99,6 +99,23 @@ if isfield(options, 'lipschitz_constant')
     end
 end
 
+% use_gradient_reference_consistency
+if isfield(options, 'use_gradient_reference_consistency')
+    if ~(islogical(options.use_gradient_reference_consistency) ...
+            && isscalar(options.use_gradient_reference_consistency))
+        error('options.use_gradient_reference_consistency must be a logical scalar.');
+    end
+end
+
+% grad_reference_finite_difference_error_tol
+if isfield(options, 'grad_reference_finite_difference_error_tol')
+    if ~(isrealscalar(options.grad_reference_finite_difference_error_tol) ...
+            && options.grad_reference_finite_difference_error_tol > 0)
+        error(['options.grad_reference_finite_difference_error_tol must be ', ...
+            'a positive real scalar.']);
+    end
+end
+
 % Algorithm
 Algorithm_list = ["cbds", "pbds", "pads", "rbds", "ds"];
 if isfield(options, 'Algorithm')

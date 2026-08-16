@@ -34,7 +34,7 @@ end
 function verify_acceleration_off_matches_bds(oldfolder)
 
 dims = 1:5;
-ir_values = 0:11;
+ir_values = 0:17;
 seed_values = [12345, 23456, 34567];
 algorithms = ["cbds", "pbds", "rbds", "pads", "ds"];
 

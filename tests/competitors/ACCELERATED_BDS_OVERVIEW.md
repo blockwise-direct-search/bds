@@ -64,9 +64,10 @@ addpath("tests");
 verify_bds_acceleration
 ```
 
-The current checker covers 2160 cases:
+The current checker covers 2610 cases:
 
-- 900 acceleration-off cases across `cbds`, `pbds`, `rbds`, `pads`, and `ds`;
+- 1350 acceleration-off cases across `cbds`, `pbds`, `rbds`, `pads`, and `ds`,
+  including estimated-gradient stopping options;
 - 630 acceleration-on cases using the default entry path;
 - 630 acceleration-on cases using explicit `Algorithm = "cbds"`.
 
@@ -76,6 +77,7 @@ Changes that touch gradient stopping or evaluation bookkeeping must also run:
 addpath("tests");
 verify_gradient_stop_no_extra_evaluations
 verify_gradient_estimate_validity
+verify_gradient_stopping_threshold
 ```
 
 These focused checks verify that the estimated-gradient stop is activated,
@@ -83,6 +85,10 @@ that its finalized defaults match the corresponding explicit options, that
 zero and every other structurally valid finite estimate remain available while
 `NaN` and `Inf` are rejected, and that the recorded function count and
 histories include every objective evaluation.
+`verify_gradient_stopping_threshold` additionally covers `G_ref < 1`,
+`G_ref = 1`, `G_ref > 1`, strict equality, a multi-entry window, the removed
+option, acceleration-off equality with `bds.m`, and an acceleration-on lean
+comparison.
 
 Changes to recent-function-value stopping must also run:
 

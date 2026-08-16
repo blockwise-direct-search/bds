@@ -40,6 +40,8 @@ field_list = {
     'grad_window_size'
     'grad_tol'
     'lipschitz_constant'
+    'use_gradient_reference_consistency'
+    'grad_reference_finite_difference_error_tol'
     'Algorithm'
     'direction_set'
     'num_blocks'
@@ -270,6 +272,15 @@ for i = 1:length(field_list)
         end
     end
 end
+
+% Two gradient estimates at the same base point use step sizes h and
+% shrink*h. The leading error of a central difference is proportional to
+% h^2, so their leading difference is (1-shrink^2) times the error at h.
+% Convert the public relative finite-difference error tolerance into the raw
+% consistency threshold applied to the two reconstructed gradients.
+options.grad_reference_raw_tol = ...
+    options.grad_reference_finite_difference_error_tol ...
+    * (1 - options.shrink^2) / options.shrink^2;
 
 % Initialize alpha_hist if output_alpha_hist is true and alpha_hist does not exceed the
 % maximum memory size allowed.
