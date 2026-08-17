@@ -1,8 +1,18 @@
 function constant_value = get_accelerated_bds_default_constant(constant_name)
 %GET_ACCELERATED_BDS_DEFAULT_CONSTANT Defaults for accelerated_bds_options.
 %
-% These defaults intentionally preserve the historical reference solver where
-% it differs from bds.m. Explicit user options remain authoritative.
+%   CONSTANT_VALUE = GET_ACCELERATED_BDS_DEFAULT_CONSTANT(CONSTANT_NAME)
+%   returns the internal default selected by CONSTANT_NAME.
+%
+%   constant_name                      Text scalar naming an option or dimension-independent
+%                                      constant handled below. An unknown name raises an error.
+%   constant_value                     Default with the type and shape required by the named
+%                                      option or constant.
+%
+%   These defaults intentionally preserve the historical reference solver
+%   where it differs from bds.m. The caller may combine a returned constant
+%   with problem-dependent information, such as the dimension, before using
+%   it as a public default. Explicit nonempty user options remain authoritative.
 
 switch constant_name
     case "MaxFunctionEvaluations_dim_factor"

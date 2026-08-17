@@ -1,55 +1,83 @@
-function [state, result] = run_post_poll_acceleration_phase(fun, state, config, iteration_step)
-%RUN_POST_POLL_ACCELERATION_PHASE Pattern-step and momentum search after polling.
+function [post_poll_acceleration_state, acceleration_succeeded, target_reached] = ...
+    run_post_poll_acceleration_phase(fun, post_poll_acceleration_state, ...
+        acceleration_configuration, iteration_step)
+%RUN_POST_POLL_ACCELERATION_PHASE Search pattern and momentum directions after polling.
 %
-%   This helper owns the post-poll acceleration phase of
-%   accelerated_bds_options. The caller enters this phase only after an
-%   improving iteration whose net displacement exceeds max(alpha_tol).
+%   [POST_POLL_ACCELERATION_STATE, ACCELERATION_SUCCEEDED, TARGET_REACHED] =
+%   RUN_POST_POLL_ACCELERATION_PHASE(FUN, POST_POLL_ACCELERATION_STATE,
+%   ACCELERATION_CONFIGURATION, ITERATION_STEP) first searches the normalized
+%   net displacement of the current improving iteration and then, when the
+%   pattern search does not improve, searches the current momentum direction.
 %
-%   The pattern direction is the normalized net displacement of the base
-%   point during the current iteration, and the pattern step is the maximum
-%   of the displacement norm and config.step_floor (= max(alpha_tol)). If
-%   momentum extrapolation is enabled, the momentum vector is updated first
-%   (regardless of whether the pattern search later succeeds) and normalized
-%   into a momentum direction when its norm exceeds config.step_floor.
+%   fun                                Objective function.
+%   post_poll_acceleration_state       Input/output structure with the following fields.
+%   xbase                              Base point at entry. It is replaced by the best
+%                                      accepted acceleration point when this phase succeeds.
+%   fbase                              Objective value used for comparisons at xbase. It is
+%                                      updated together with xbase when this phase succeeds.
+%   nf                                 Number of objective evaluations performed so far. It
+%                                      is incremented after every evaluation made here.
+%   fhist                              Function-value history. Each new raw objective value
+%                                      is stored at the corresponding updated nf index.
+%   xhist                              Point history. It is updated only when output_xhist
+%                                      is true.
+%   invalid_points                     Matrix whose columns are evaluated points with
+%                                      invalid objective values. It is updated only when
+%                                      output_xhist is true.
+%   productive_direction_memory        Ordered structure array with fields direction and
+%                                      step. An accepted direction may be admitted to this
+%                                      memory.
+%   momentum                           Current n-by-1 momentum vector. When momentum
+%                                      extrapolation is enabled, it is updated before any
+%                                      pattern candidate is evaluated and remains updated
+%                                      regardless of the later search outcome.
 %
-%   Pattern candidates with factors [1, 2, 4] are evaluated first, with
-%   opportunistic stopping at the first non-improving candidate. Momentum
-%   candidates are evaluated only when the pattern search produced no
-%   improvement, the target has not been reached, and a momentum direction is
-%   available; a momentum candidate identical to an already-evaluated failed
-%   pattern point is not reevaluated. An accepted acceleration updates the
-%   base point and may store its direction in the productive-direction
-%   memory.
+%   acceleration_configuration         Read-only structure with the following fields.
+%   use_iteration_pattern_step         Whether pattern candidates are evaluated.
+%   use_momentum_extrapolation         Whether momentum is updated and momentum candidates
+%                                      may be evaluated.
+%   use_productive_direction_memory    Whether an accepted acceleration direction may be
+%                                      stored.
+%   momentum_decay                     Weight applied to the previous momentum vector.
+%   productive_direction_memory_size   Maximum number of retained productive directions.
+%   step_floor                         Lower bound for the pattern step and for normalizing
+%                                      momentum.
+%   MaxFunctionEvaluations             Total objective-evaluation budget.
+%   ftarget                            Target function value.
+%   output_xhist                       Whether point and invalid-point histories are recorded.
 %
-%   The interface has three layers. config is the read-only acceleration
-%   configuration; this phase uses only use_iteration_pattern_step,
-%   use_momentum_extrapolation, use_productive_direction_memory,
-%   momentum_decay, productive_direction_memory_size, step_floor,
-%   MaxFunctionEvaluations, ftarget, and output_xhist. state packs the
-%   mutable solver/evaluation state the phase may update: xbase, fbase, nf,
-%   fhist, xhist, invalid_points, productive_direction_memory, and momentum.
-%   iteration_step is the net displacement of the current iteration; its norm
-%   is computed internally. result is the phase result: succeeded records
-%   whether an acceleration candidate was accepted, and target_reached
-%   records whether the phase evaluated a point with f <= ftarget; the
-%   caller owns the corresponding terminate/exitflag update.
+%   iteration_step                     Net displacement of xbase during the current outer
+%                                      iteration. The caller enters this phase only when its
+%                                      norm exceeds step_floor.
+%   acceleration_succeeded             True exactly when the phase accepts a point whose
+%                                      function value is strictly smaller than the entry
+%                                      fbase.
+%   target_reached                     Whether the pattern or momentum search accepts an
+%                                      improving candidate with comparison value no larger
+%                                      than ftarget. The caller owns the corresponding
+%                                      terminate and exitflag updates.
 %
-%   The phase preserves target detection, evaluation accounting, and histories
-%   of the original inline block. The caller applies the resulting
-%   target_reached flag to update termination and exitflag.
+%   Pattern candidates use factors [1, 2, 4] and stop at the first
+%   non-improving candidate. Momentum candidates use the same factors and are
+%   tried only if the pattern search did not improve, the target was not
+%   reached, a usable momentum direction exists, and budget remains. A
+%   momentum point identical to the failed pattern point is not reevaluated.
 
-result = struct('succeeded', false, 'target_reached', false);
+acceleration_succeeded = false;
+target_reached = false;
 
 iteration_step_norm = norm(iteration_step);
 pattern_direction = iteration_step / iteration_step_norm;
-pattern_step = max(iteration_step_norm, config.step_floor);
+pattern_step = max(iteration_step_norm, acceleration_configuration.step_floor);
 
-if config.use_momentum_extrapolation
-    state.momentum = config.momentum_decay * state.momentum + ...
-        (1.0 - config.momentum_decay) * pattern_direction;
-    momentum_norm = norm(state.momentum);
-    if momentum_norm > config.step_floor
-        momentum_direction = state.momentum / momentum_norm;
+if acceleration_configuration.use_momentum_extrapolation
+    post_poll_acceleration_state.momentum = ...
+        acceleration_configuration.momentum_decay ...
+        * post_poll_acceleration_state.momentum ...
+        + (1.0 - acceleration_configuration.momentum_decay) * pattern_direction;
+    momentum_norm = norm(post_poll_acceleration_state.momentum);
+    if momentum_norm > acceleration_configuration.step_floor
+        momentum_direction = post_poll_acceleration_state.momentum / momentum_norm;
     else
         momentum_direction = [];
     end
@@ -58,25 +86,28 @@ else
 end
 
 factors = [1.0, 2.0, 4.0];
-xbest = state.xbase;
-fbest = state.fbase;
+xbest = post_poll_acceleration_state.xbase;
+fbest = post_poll_acceleration_state.fbase;
 best_direction = [];
 pattern_improved = false;
 failed_pattern_point = [];
 
-if config.use_iteration_pattern_step
+if acceleration_configuration.use_iteration_pattern_step
     for i = 1:numel(factors)
-        if state.nf >= config.MaxFunctionEvaluations
+        if post_poll_acceleration_state.nf ...
+                >= acceleration_configuration.MaxFunctionEvaluations
             break;
         end
-        xnew = state.xbase + factors(i) * pattern_step * pattern_direction;
+        xnew = post_poll_acceleration_state.xbase ...
+            + factors(i) * pattern_step * pattern_direction;
         [fnew, fnew_real, is_valid] = eval_fun(fun, xnew);
-        state.nf = state.nf + 1;
-        state.fhist(state.nf) = fnew_real;
-        if config.output_xhist
-            state.xhist(:, state.nf) = xnew;
+        post_poll_acceleration_state.nf = post_poll_acceleration_state.nf + 1;
+        post_poll_acceleration_state.fhist(post_poll_acceleration_state.nf) = fnew_real;
+        if acceleration_configuration.output_xhist
+            post_poll_acceleration_state.xhist(:, post_poll_acceleration_state.nf) = xnew;
             if ~is_valid
-                state.invalid_points = [state.invalid_points, xnew];
+                post_poll_acceleration_state.invalid_points = [ ...
+                    post_poll_acceleration_state.invalid_points, xnew];
             end
         end
         if fnew < fbest
@@ -88,31 +119,35 @@ if config.use_iteration_pattern_step
             failed_pattern_point = xnew;
             break;
         end
-        if fnew <= config.ftarget
-            result.target_reached = true;
+        if fnew <= acceleration_configuration.ftarget
+            target_reached = true;
             break;
         end
     end
 end
 
-if ~result.target_reached && config.use_momentum_extrapolation && ...
-        ~pattern_improved && ~isempty(momentum_direction) ...
-        && state.nf < config.MaxFunctionEvaluations
+if ~target_reached && acceleration_configuration.use_momentum_extrapolation ...
+        && ~pattern_improved && ~isempty(momentum_direction) ...
+        && post_poll_acceleration_state.nf ...
+            < acceleration_configuration.MaxFunctionEvaluations
     for i = 1:numel(factors)
-        if state.nf >= config.MaxFunctionEvaluations
+        if post_poll_acceleration_state.nf ...
+                >= acceleration_configuration.MaxFunctionEvaluations
             break;
         end
-        xnew = state.xbase + factors(i) * pattern_step * momentum_direction;
+        xnew = post_poll_acceleration_state.xbase ...
+            + factors(i) * pattern_step * momentum_direction;
         if ~isempty(failed_pattern_point) && isequal(xnew, failed_pattern_point)
             break;
         end
         [fnew, fnew_real, is_valid] = eval_fun(fun, xnew);
-        state.nf = state.nf + 1;
-        state.fhist(state.nf) = fnew_real;
-        if config.output_xhist
-            state.xhist(:, state.nf) = xnew;
+        post_poll_acceleration_state.nf = post_poll_acceleration_state.nf + 1;
+        post_poll_acceleration_state.fhist(post_poll_acceleration_state.nf) = fnew_real;
+        if acceleration_configuration.output_xhist
+            post_poll_acceleration_state.xhist(:, post_poll_acceleration_state.nf) = xnew;
             if ~is_valid
-                state.invalid_points = [state.invalid_points, xnew];
+                post_poll_acceleration_state.invalid_points = [ ...
+                    post_poll_acceleration_state.invalid_points, xnew];
             end
         end
         if fnew < fbest
@@ -122,21 +157,24 @@ if ~result.target_reached && config.use_momentum_extrapolation && ...
         else
             break;
         end
-        if fnew <= config.ftarget
-            result.target_reached = true;
+        if fnew <= acceleration_configuration.ftarget
+            target_reached = true;
             break;
         end
     end
 end
 
-if fbest < state.fbase
-    result.succeeded = true;
-    state.xbase = xbest;
-    state.fbase = fbest;
-    if config.use_productive_direction_memory && ~isempty(best_direction)
-        state.productive_direction_memory = remember_accelerated_bds_direction( ...
-            state.productive_direction_memory, best_direction, pattern_step, ...
-            config.productive_direction_memory_size);
+if fbest < post_poll_acceleration_state.fbase
+    acceleration_succeeded = true;
+    post_poll_acceleration_state.xbase = xbest;
+    post_poll_acceleration_state.fbase = fbest;
+    if acceleration_configuration.use_productive_direction_memory ...
+            && ~isempty(best_direction)
+        post_poll_acceleration_state.productive_direction_memory = ...
+            admit_productive_direction_to_memory( ...
+                post_poll_acceleration_state.productive_direction_memory, ...
+                best_direction, pattern_step, ...
+                acceleration_configuration.productive_direction_memory_size);
     end
 end
 

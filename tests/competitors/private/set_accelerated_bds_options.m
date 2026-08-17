@@ -1,8 +1,25 @@
 function options = set_accelerated_bds_options(options, n, x0)
-% SET_ACCELERATED_BDS_OPTIONS Set and validate options for accelerated_bds_options.
+%SET_ACCELERATED_BDS_OPTIONS Complete and validate accelerated BDS options.
 %
-%   OPTIONS = SET_ACCELERATED_BDS_OPTIONS(OPTIONS, N, X0) validates the values
-%   in OPTIONS, resolves the priority of Algorithm, and sets the missing values.
+%   OPTIONS = SET_ACCELERATED_BDS_OPTIONS(OPTIONS, N, X0) returns the complete
+%   internal option structure used by accelerated_bds_options.
+%
+%   options                            Input/output scalar structure containing any subset of
+%                                      the public options documented by accelerated_bds_options.
+%                                      Explicit nonempty values take priority over defaults.
+%                                      Algorithm is resolved before the block options and
+%                                      determines num_blocks, batch_size, and
+%                                      block_visiting_pattern when both forms are supplied. The
+%                                      output contains validated, shape-normalized values for
+%                                      every defaulted option and each accepted optional field.
+%                                      Memory guards may disable an unsupported history output.
+%   n                                  Problem dimension derived from the column form of x0. It
+%                                      sets dimension-dependent defaults and option bounds.
+%   x0                                 Initial n-by-1 point prepared by accelerated_bds_options.
+%                                      It is used when alpha_init is "auto"; that mode also
+%                                      requires finite components.
+%   grad_reference_raw_tol             Internal output field derived from the validated
+%                                      grad_reference_finite_difference_error_tol and shrink.
 
 if isfield(options, 'grad_reference_relative_tol')
     error('accelerated_bds_options:RemovedGradientReferenceRelativeTolerance', ...
