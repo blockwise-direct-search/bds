@@ -6,15 +6,29 @@ function [productive_direction_memory_state, target_reached] = ...
 %   [PRODUCTIVE_DIRECTION_MEMORY_STATE, TARGET_REACHED] =
 %   RUN_PRODUCTIVE_DIRECTION_MEMORY_PHASE(FUN,
 %   PRODUCTIVE_DIRECTION_MEMORY_STATE, ACCELERATION_CONFIGURATION,
-%   ALPHA_AVERAGE) considers the retained productive directions in list
-%   order before the regular block-polling phase. For each entry, the trial
-%   step is the larger of ALPHA_AVERAGE and the stored step. The first
-%   improving direction is accepted. Unless that first accepted point already
-%   reaches the target, it is followed by at most two extrapolation
-%   evaluations and promoted to the front of memory. The phase then stops.
+%   ALPHA_AVERAGE) considers the retained productive-direction memory entries
+%   in their stored order before the regular block-polling phase. Each entry
+%   contains a normalized productive direction and a successful step length
+%   stored with that direction. For each retained direction, the trial step is
+%   the larger of ALPHA_AVERAGE and the step stored with that direction.
+%
+%   The stored step preserves a successful direction-specific search scale,
+%   whereas ALPHA_AVERAGE reflects the current overall polling scale. Taking
+%   the larger value prevents the memory search from trying that direction
+%   below either reference scale. A retained direction need not belong to one
+%   particular block, so the mean of the current per-block polling step sizes
+%   provides a single direction-independent measure of the current scale.
+%
+%   The first improving direction is accepted. Unless that accepted memory
+%   trial already reaches the target, the phase evaluates at most two farther
+%   points along the same direction and then promotes the direction to the
+%   front of memory. The phase then stops.
 %
 %   fun                                Objective function.
-%   productive_direction_memory_state  Input/output structure with the following fields.
+%
+%   PRODUCTIVE_DIRECTION_MEMORY_STATE is an input/output structure containing
+%   the mutable solver state used by this phase. Its fields are listed below.
+%
 %   xbase                              Current base point, an n-by-1 real vector. It is
 %                                      updated when this phase accepts an improving point.
 %   fbase                              Objective value used for comparisons at xbase. It is
@@ -32,13 +46,18 @@ function [productive_direction_memory_state, target_reached] = ...
 %                                      step. A successful direction is moved to the
 %                                      highest-priority first position.
 %
-%   acceleration_configuration         Read-only structure with the following fields.
+%   ACCELERATION_CONFIGURATION is a read-only structure containing the options
+%   needed by this phase. Its fields control whether the phase runs, the common
+%   evaluation budget and target, and optional point-history recording.
+%
 %   use_productive_direction_memory    Whether this phase is enabled.
 %   MaxFunctionEvaluations             Total objective-evaluation budget.
 %   ftarget                            Target function value.
 %   output_xhist                       Whether point and invalid-point histories are recorded.
 %
-%   alpha_average                      Mean of the current per-block polling step sizes.
+%   alpha_average                      Mean of the current per-block polling step sizes. It is
+%                                      the direction-independent current-scale reference used
+%                                      when selecting a memory trial step.
 %   target_reached                     True exactly when this phase evaluates or extrapolates
 %                                      to a point whose comparison value is no larger than
 %                                      ftarget. The caller owns the corresponding terminate
@@ -88,6 +107,11 @@ if acceleration_configuration.use_productive_direction_memory && ...
             if target_reached
                 break;
             end
+            % Starting from the accepted memory trial, probe at most two
+            % farther points along the same direction. The first extrapolation
+            % step is twice the accepted trial step and is doubled again only
+            % after a further improvement. The helper also updates the
+            % evaluation count and recorded histories.
             [productive_direction_memory_state.xbase, ...
                 productive_direction_memory_state.fbase, ...
                 productive_direction_memory_state.nf, ...
@@ -104,6 +128,10 @@ if acceleration_configuration.use_productive_direction_memory && ...
                     productive_direction_memory_state.xhist, ...
                     productive_direction_memory_state.invalid_points, ...
                     acceleration_configuration.output_xhist);
+            % Move the successful retained direction from its old position to
+            % the front of memory and store the accepted memory-trial step, so
+            % that this direction has the highest priority the next time the
+            % memory is searched.
             productive_direction_memory_state.productive_direction_memory(i) = [];
             productive_direction_memory_state.productive_direction_memory = ...
                 prepend_productive_direction_memory( ...
