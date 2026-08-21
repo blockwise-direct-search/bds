@@ -1,8 +1,8 @@
-function productive_direction_memory = prepend_productive_direction_memory( ...
+function productive_direction_memory = insert_productive_direction_at_memory_front( ...
     productive_direction_memory, direction, step)
-%PREPEND_PRODUCTIVE_DIRECTION_MEMORY Put one entry at the highest priority.
+%INSERT_PRODUCTIVE_DIRECTION_AT_MEMORY_FRONT Insert one direction at the highest priority.
 %
-%   PRODUCTIVE_DIRECTION_MEMORY = PREPEND_PRODUCTIVE_DIRECTION_MEMORY(
+%   PRODUCTIVE_DIRECTION_MEMORY = INSERT_PRODUCTIVE_DIRECTION_AT_MEMORY_FRONT(
 %   PRODUCTIVE_DIRECTION_MEMORY, DIRECTION, STEP) constructs one memory entry
 %   and inserts it before all existing entries.
 %

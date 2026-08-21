@@ -12,17 +12,20 @@ function [productive_direction_memory_state, target_reached] = ...
 %   stored with that direction. For each retained direction, the trial step is
 %   the larger of ALPHA_AVERAGE and the step stored with that direction.
 %
-%   The stored step preserves a successful direction-specific search scale,
-%   whereas ALPHA_AVERAGE reflects the current overall polling scale. Taking
-%   the larger value prevents the memory search from trying that direction
-%   below either reference scale. A retained direction need not belong to one
-%   particular block, so the mean of the current per-block polling step sizes
-%   provides a single direction-independent measure of the current scale.
+%   This memory search is a bounded opportunistic acceleration attempt made
+%   before regular polling, so its trial step is deliberately aggressive. The
+%   maximum makes the trial no shorter than either the direction's previously
+%   successful step or the scale currently explored by polling; a smaller,
+%   conservative probe would weaken the purpose of this separate acceleration
+%   phase. A retained direction need not belong to one particular block, so
+%   ALPHA_AVERAGE is the mean of the current per-block polling step sizes and
+%   supplies one block-independent measure of the current polling scale.
 %
-%   The first improving direction is accepted. Unless that accepted memory
-%   trial already reaches the target, the phase evaluates at most two farther
-%   points along the same direction and then promotes the direction to the
-%   front of memory. The phase then stops.
+%   The extra evaluation cost is controlled: each retained direction is tried
+%   at most once, the search stops at the first improving direction, and that
+%   success triggers at most two extrapolation evaluations. The accepted
+%   direction is promoted to the front of memory. If no retained direction
+%   improves the objective, the algorithm proceeds to regular polling.
 %
 %   fun                                Objective function.
 %
@@ -134,7 +137,7 @@ if acceleration_configuration.use_productive_direction_memory && ...
             % memory is searched.
             productive_direction_memory_state.productive_direction_memory(i) = [];
             productive_direction_memory_state.productive_direction_memory = ...
-                prepend_productive_direction_memory( ...
+                insert_productive_direction_at_memory_front( ...
                     productive_direction_memory_state.productive_direction_memory, ...
                     direction, step);
             if productive_direction_memory_state.fbase ...

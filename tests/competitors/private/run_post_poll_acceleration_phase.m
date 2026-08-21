@@ -5,12 +5,21 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %
 %   [POST_POLL_ACCELERATION_STATE, ACCELERATION_SUCCEEDED, TARGET_REACHED] =
 %   RUN_POST_POLL_ACCELERATION_PHASE(FUN, POST_POLL_ACCELERATION_STATE,
-%   ACCELERATION_CONFIGURATION, ITERATION_STEP) first searches the normalized
-%   net displacement of the current improving iteration and then, when the
-%   pattern search does not improve, searches the current momentum direction.
+%   ACCELERATION_CONFIGURATION, ITERATION_STEP) performs up to two ordered
+%   directional searches after regular polling:
+%
+%   1. The iteration-pattern search probes along the normalized net
+%      displacement produced during the current improving iteration.
+%   2. The momentum-direction extrapolation is a fallback. It probes along
+%      the updated momentum direction only when the pattern search is disabled
+%      or produces no improvement.
 %
 %   fun                                Objective function.
-%   post_poll_acceleration_state       Input/output structure with the following fields.
+%
+%   POST_POLL_ACCELERATION_STATE is an input/output structure containing the
+%   mutable solver state read or updated by this phase. Its fields are listed
+%   below.
+%
 %   xbase                              Base point at entry. It is replaced by the best
 %                                      accepted acceleration point when this phase succeeds.
 %   fbase                              Objective value used for comparisons at xbase. It is
@@ -32,7 +41,11 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %                                      pattern candidate is evaluated and remains updated
 %                                      regardless of the later search outcome.
 %
-%   acceleration_configuration         Read-only structure with the following fields.
+%   ACCELERATION_CONFIGURATION is a read-only structure containing the options
+%   needed by the two post-poll acceleration searches. Its fields control
+%   which searches are enabled, the momentum update, their common evaluation
+%   constraints and history recording, and productive-direction admission.
+%
 %   use_iteration_pattern_step         Whether pattern candidates are evaluated.
 %   use_momentum_extrapolation         Whether momentum is updated and momentum candidates
 %                                      may be evaluated.
@@ -57,11 +70,13 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %                                      than ftarget. The caller owns the corresponding
 %                                      terminate and exitflag updates.
 %
-%   Pattern candidates use factors [1, 2, 4] and stop at the first
-%   non-improving candidate. Momentum candidates use the same factors and are
-%   tried only if the pattern search did not improve, the target was not
-%   reached, a usable momentum direction exists, and budget remains. A
-%   momentum point identical to the failed pattern point is not reevaluated.
+%   Both searches generate candidates from the entry xbase using the same
+%   pattern_step and the same factors [1, 2, 4]; only the search direction
+%   differs. Each search stops at its first non-improving candidate. Momentum
+%   candidates are tried only if the pattern search did not improve, the
+%   target was not reached, a usable momentum direction exists, and budget
+%   remains. A momentum point identical to the failed pattern point is not
+%   reevaluated.
 
 acceleration_succeeded = false;
 target_reached = false;
@@ -70,6 +85,8 @@ iteration_step_norm = norm(iteration_step);
 pattern_direction = iteration_step / iteration_step_norm;
 pattern_step = max(iteration_step_norm, acceleration_configuration.step_floor);
 
+% Prepare the momentum direction before either directional search. The updated
+% momentum remains part of the solver state even if the pattern search succeeds.
 if acceleration_configuration.use_momentum_extrapolation
     post_poll_acceleration_state.momentum = ...
         acceleration_configuration.momentum_decay ...
@@ -85,6 +102,8 @@ else
     momentum_direction = [];
 end
 
+% Both directional searches use this common radial schedule from the entry
+% xbase with the common pattern_step; only the search direction changes.
 factors = [1.0, 2.0, 4.0];
 xbest = post_poll_acceleration_state.xbase;
 fbest = post_poll_acceleration_state.fbase;
@@ -92,6 +111,7 @@ best_direction = [];
 pattern_improved = false;
 failed_pattern_point = [];
 
+% Part 1: search along the current iteration-pattern direction.
 if acceleration_configuration.use_iteration_pattern_step
     for i = 1:numel(factors)
         if post_poll_acceleration_state.nf ...
@@ -126,6 +146,8 @@ if acceleration_configuration.use_iteration_pattern_step
     end
 end
 
+% Part 2: when the pattern search is disabled or does not improve, reuse the
+% same factors and pattern_step along the updated momentum direction.
 if ~target_reached && acceleration_configuration.use_momentum_extrapolation ...
         && ~pattern_improved && ~isempty(momentum_direction) ...
         && post_poll_acceleration_state.nf ...
@@ -164,6 +186,8 @@ if ~target_reached && acceleration_configuration.use_momentum_extrapolation ...
     end
 end
 
+% Commit the best point found by whichever directional search succeeded and,
+% when enabled, admit its direction to productive-direction memory.
 if fbest < post_poll_acceleration_state.fbase
     acceleration_succeeded = true;
     post_poll_acceleration_state.xbase = xbest;

@@ -17,7 +17,8 @@ function productive_direction_memory = admit_productive_direction_to_memory( ...
 %                                      storage. An exact zero leaves the memory unchanged.
 %   candidate_step                     Scalar step stored with an admitted direction.
 %   productive_direction_memory_size   Positive integer capacity. If the memory is full, its
-%                                      last entry is removed before a new entry is prepended.
+%                                      last entry is removed before a new entry is inserted at
+%                                      the front.
 %
 %   A candidate is treated as a duplicate when the absolute inner product
 %   with a retained normalized direction is greater than 0.95. Duplicate
@@ -44,7 +45,7 @@ end
 if numel(productive_direction_memory) >= productive_direction_memory_size
     productive_direction_memory(end) = [];
 end
-productive_direction_memory = prepend_productive_direction_memory( ...
+productive_direction_memory = insert_productive_direction_at_memory_front( ...
     productive_direction_memory, candidate_direction, candidate_step);
 
 end

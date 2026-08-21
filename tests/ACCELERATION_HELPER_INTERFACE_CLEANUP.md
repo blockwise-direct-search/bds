@@ -19,7 +19,7 @@ Behavior-preserving changes are limited to:
 - `tests/competitors/private/run_productive_direction_memory_phase.m`
 - `tests/competitors/private/run_post_poll_acceleration_phase.m`
 - `tests/competitors/private/remember_accelerated_bds_direction.m`
-- `tests/competitors/private/prepend_productive_direction_memory.m`
+- `tests/competitors/private/insert_productive_direction_at_memory_front.m`
 - `tests/competitors/private/try_accelerated_bds_extrapolation.m`
 - `tests/competitors/private/set_accelerated_bds_options.m`
 - `tests/competitors/private/get_accelerated_bds_default_constant.m`
@@ -36,7 +36,8 @@ Every stage must preserve all of the following:
 1. No additional objective-function evaluation is introduced.
 2. Productive directions are tried in the same order.
 3. A newly admitted direction is normalized, checked for near parallel or
-   antiparallel duplicates, subject to the same capacity rule, and prepended.
+   antiparallel duplicates, subject to the same capacity rule, and inserted at
+   the front.
 4. A retained direction that succeeds is promoted to the front with the same
    stored step.
 5. Pre-poll extrapolation performs at most two probes with the same doubling,
@@ -74,7 +75,7 @@ to. A structure that only wraps one or two logical outputs is not retained.
   `[state, result]` interface.
 - [x] Confirm the current gradient-stopping checks pass.
 - [x] Confirm the current complete acceleration equivalence suite passes.
-- [x] Confirm the current renamed prepend helper passes Code Analyzer.
+- [x] Confirm the current renamed front-insertion helper passes Code Analyzer.
 
 Observed baseline:
 
@@ -162,7 +163,7 @@ files had identical local/server SHA-256 values after the accepted run.
   direction extrapolation.
 - [x] Replace abbreviated interface names such as `prod_memory`, `mem_size`,
   and `is_dup` with descriptive names.
-- [x] Give the admission, prepend, and extrapolation helpers complete interface
+- [x] Give the admission, front-insertion, and extrapolation helpers complete interface
   contracts.
 - [x] Preserve the current duplicate threshold and every memory/extrapolation
   decision exactly; changing those mechanisms is out of scope.
@@ -189,7 +190,7 @@ LEAF_HELPER_STAGE_FOCUSED_OK
 LEAF_HELPER_STAGE_EQUIVALENCE_OK
 ```
 
-The admission, prepend, and both phase helpers had no Code Analyzer
+The admission, front-insertion, and both phase helpers had no Code Analyzer
 diagnostics. The extrapolation helper retained exactly the pre-change
 diagnostic on dynamically appending an invalid point; the corresponding Git
 baseline statement was `invalid_points = [invalid_points, xcand]`. No
