@@ -28,13 +28,17 @@ solver1 = str2func(solvers{1});
 solver2 = str2func(solvers{2});
 
 % The simplified version of BDS has no configurable options; all constants are hardcoded.
-% To ensure consistency between the full version and the simplified version, we pass
-% the corresponding hardcoded parameters to the full version via options.
+% To ensure consistency between the full version and the simplified version, pass
+% the corresponding hardcoded parameters to the full version and disable the three
+% acceleration mechanisms that are absent from bds_simplified.
 %tic;
 options_bds = struct();
 options_bds.expand = 2;
 options_bds.shrink = 0.5;
 options_bds.output_xhist = true;
+options_bds.use_productive_direction_memory = false;
+options_bds.use_iteration_pattern_step = false;
+options_bds.use_momentum_extrapolation = false;
 [x1, fx1, exitflag1, output1] = solver1(p.objective, p.x0, options_bds);
 %T = toc; fprintf('\nRunning time for %s:\t %f\n', solvers{1}, T);
 %tic;
@@ -48,7 +52,6 @@ rng(orig_rng_state);
 equiv = iseq(x1(:), fx1, exitflag1, output1, x2(:), fx2, exitflag2, output2, prec);
 
 if ~equiv
-    keyboard
     format long;
     fprintf('\nnf: nf1 = %d, nf2 = %d', output1.funcCount, output2.funcCount)
     fprintf('\nx:')
@@ -60,7 +63,6 @@ if ~equiv
     if single_test && options.sequential
         fprintf('\nThe solvers produce different results on %s at the %dth run.\n\n', pname, ir);
         cd(options.olddir);
-        keyboard
     end
     error('\nThe solvers produce different results on %s at the %dth run.\n', pname, ir);
 end
@@ -80,8 +82,6 @@ function eq = iseq(x, f, exitflag, output, xx, ff, ee, oo, prec)
     end
     
     return
-
-
 
 
 

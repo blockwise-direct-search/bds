@@ -27,7 +27,6 @@ if isfield(options, 'MaxFunctionEvaluations')
         error('options.MaxFunctionEvaluations must be a positive integer.');
     end
 end
-
 % ftarget
 if isfield(options, 'ftarget')
     if ~isrealscalar(options.ftarget)
@@ -309,4 +308,3 @@ if isfield(options, 'debug_flag')
 end
 
 end
-

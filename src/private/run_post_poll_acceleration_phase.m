@@ -101,7 +101,6 @@ if acceleration_configuration.use_momentum_extrapolation
 else
     momentum_direction = [];
 end
-
 % Both directional searches use this common radial schedule from the entry
 % xbase with the common pattern_step; only the search direction changes.
 factors = [1.0, 2.0, 4.0];
@@ -203,4 +202,3 @@ if fbest < post_poll_acceleration_state.fbase
 end
 
 end
-

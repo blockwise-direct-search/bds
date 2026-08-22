@@ -64,4 +64,3 @@ switch constant_name
         error("Unknown constant name '%s'.", constant_name);
 end
 end
-

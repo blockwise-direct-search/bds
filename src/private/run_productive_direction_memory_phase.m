@@ -151,6 +151,4 @@ if acceleration_configuration.use_productive_direction_memory && ...
         end
     end
 end
-
 end
-

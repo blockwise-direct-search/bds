@@ -629,7 +629,7 @@ for iter = 1:maxit
         end
 
         % Terminate the computations if sub_output.terminate is true, which means that 
-        % inner_direct_search decides that the algorithm should be terminated for some reason 
+        % inner_direct_search decides that the algorithm should be terminated for some reason
         % indicated by sub_exitflag.
         if sub_output.terminate
             terminate = true;
@@ -801,7 +801,6 @@ for iter = 1:maxit
     end
 
 end
-
 % Record the number of function evaluations in output.
 output.funcCount = nf;
 % Truncate the histories of the blocks visited, the step sizes, the points visited,
@@ -861,4 +860,3 @@ if iprint >= 1
 end
 
 end
-

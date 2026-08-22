@@ -24,6 +24,4 @@ if isempty(productive_direction_memory)
 else
     productive_direction_memory = [memory_entry, productive_direction_memory];
 end
-
 end
-

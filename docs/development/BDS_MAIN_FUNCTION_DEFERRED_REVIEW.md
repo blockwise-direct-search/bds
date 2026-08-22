@@ -121,4 +121,3 @@ gates:
 3. `verify_gradient_stop_no_extra_evaluations` passes.
 4. The targeted gradient-stopping test with
    `use_gradient_reference_consistency=false` passes.
-

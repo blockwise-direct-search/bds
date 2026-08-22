@@ -23,7 +23,7 @@ jobs:
     - name: Check spelling
       id: check_spelling
       run: |
-        find . -type f \( -name "*.tex" -o -name "*.bib" \) ! -name "custom_dictionary.txt" -exec sh -c 'hunspell -l -t -d en_US {} | grep -v -w -f .github/actions/spell_check/custom_dictionary.txt > {}_spelling_errors.txt' \;
+        find . -type f \( -name "*.tex" -o -name "*.bib" \) ! -path "./research/*" ! -name "custom_dictionary.txt" -exec sh -c 'hunspell -l -t -d en_US {} | grep -v -w -f .github/actions/spell_check/custom_dictionary.txt > {}_spelling_errors.txt' \;
         errors_found=false
         for file in $(find . -type f -name "*_spelling_errors.txt"); do
           if [ -s $file ]; then

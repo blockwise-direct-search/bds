@@ -15,7 +15,6 @@ if ~(isnumeric(StepTolerance) && isreal(StepTolerance) && ...
     error('BDS:get_auto_alpha_init:InvalidStepTolerance', ...
         'StepTolerance must be a nonnegative real scalar or vector.');
 end
-
 abs_x0 = abs(x0(:));
 step_tolerance = StepTolerance(:);
 if isscalar(step_tolerance)
@@ -45,4 +44,3 @@ if ~(isnumeric(value) && isreal(value) && isscalar(value) && ...
 end
 
 end
-

@@ -41,7 +41,6 @@ end
 if is_duplicate_direction
     return;
 end
-
 if numel(productive_direction_memory) >= productive_direction_memory_size
     productive_direction_memory(end) = [];
 end
@@ -49,4 +48,3 @@ productive_direction_memory = insert_productive_direction_at_memory_front( ...
     productive_direction_memory, candidate_direction, candidate_step);
 
 end
-

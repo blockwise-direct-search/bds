@@ -142,7 +142,7 @@ if ~isfield(options, 'num_blocks')
     options.num_blocks = n;
 end
 
-% Set the step size threshold for termination. The algorithm terminates when the step size for each 
+% Set the step size threshold for termination. The algorithm terminates when the step size for each
 % block falls below their corresponding threshold.
 % If StepTolerance is not provided, it is set to 1e-6 for each block.
 % If StepTolerance is a numeric vector, its length must match options.num_blocks.
@@ -188,10 +188,10 @@ end
 
 % Set the initial step sizes.
 % If options do not contain the field of alpha_init, then the initial step size of each block is set
-% to 1. 
-% If alpha_init is a positive scalar, then the initial step size of each block is set to 
-% alpha_init. 
-% If alpha_init is a vector, then the initial step size of the i-th block is set to 
+% to 1.
+% If alpha_init is a positive scalar, then the initial step size of each block is set to
+% alpha_init.
+% If alpha_init is a vector, then the initial step size of the i-th block is set to
 % alpha_init(i). We first verify it is a numeric vector to avoid accepting strings that happen
 % to have the same length (for example, 'auto' when num_blocks = 4).
 % If alpha_init is "auto", then use a fminsearch-inspired scale-aware rule
