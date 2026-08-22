@@ -67,6 +67,7 @@ ignore$
 ^\.github/CODEOWNERS
 ^\.github/dependabot.yml
 ^backup/
+^research/
 \.eps$
 \.pdf$
 \.djvu$

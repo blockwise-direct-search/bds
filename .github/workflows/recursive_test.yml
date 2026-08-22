@@ -3,9 +3,7 @@ name: Recursive test
 # which is written by Zaikun Zhang.
 
 on:
-  # Trigger the workflow on push or pull request
-  # push:
-  pull_request:  # DANGEROUS! MUST be disabled for self-hosted runners!
+  # This expensive stress-style matrix is scheduled or started manually; it is not a PR gate.
   # Trigger the workflow by cron. The default time zone of GitHub Actions is UTC.
   schedule:
   - cron: '0 18 3 * *'
