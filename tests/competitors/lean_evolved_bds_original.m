@@ -9,7 +9,7 @@ function [xopt, fopt, exitflag, output] = lean_evolved_bds_original(fun, x0)
 
 x0 = x0(:);
 n = numel(x0);
-maxfun = 200 * n;
+maxfun = 500 * n;
 maxit = maxfun;
 alpha_tol = 1e-6;
 alpha_all = ones(n, 1);

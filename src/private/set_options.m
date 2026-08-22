@@ -1,115 +1,52 @@
 function options = set_options(options, n, x0)
-% SET_OPTIONS Set and validate options for the BDS algorithm.
+%SET_OPTIONS Complete and validate BDS options.
 %
-%   OPTIONS = SET_OPTIONS(OPTIONS, N, X0) processes and validates the input options
-%   structure for the BDS algorithm. It performs the following tasks:
-%   1. Validate that all field names in OPTIONS are recognized.
-%   2. Validate that all field values are valid (via validate_options).
-%   3. Resolve conflicts between mutually exclusive options (e.g., Algorithm
-%      vs. block_visiting_pattern/num_blocks/batch_size).
-%   4. Set default values for missing fields based on problem dimension N and
-%      other context-specific information.
-%   5. Check memory constraints for optional output fields (output_alpha_hist,
-%      output_xhist).
+%   OPTIONS = SET_OPTIONS(OPTIONS, N, X0) returns the complete
+%   internal option structure used by bds.
 %
-%   Inputs:
-%   - options: A structure containing user-specified options for the BDS algorithm.
-%              All field names must be valid and recognized.
-%   - n: The dimension of the optimization problem.
-%   - x0: The initial point for the optimization problem.
-%
-%   Outputs:
-%   - options: A fully validated and processed options structure with all required
-%              fields set to appropriate values (either user-provided or defaults).
-%
-%   Note:
-%   - If any field name is unknown or any field value is invalid, an error is
-%     thrown and execution terminates.
-%   - If optional output fields exceed memory limits, a warning is issued and
-%     the corresponding output flag is set to false.
+%   options                            Input/output scalar structure containing any subset of
+%                                      the public options documented by bds.
+%                                      Explicit nonempty values take priority over defaults.
+%                                      Algorithm is resolved before the block options and
+%                                      determines num_blocks, batch_size, and
+%                                      block_visiting_pattern when both forms are supplied. The
+%                                      output contains validated, shape-normalized values for
+%                                      every defaulted option and each accepted optional field.
+%                                      Memory guards may disable an unsupported history output.
+%   n                                  Problem dimension derived from the column form of x0. It
+%                                      sets dimension-dependent defaults and option bounds.
+%   x0                                 Initial n-by-1 point prepared by bds.
+%                                      It is used when alpha_init is "auto"; that mode also
+%                                      requires finite components.
+%   grad_reference_raw_tol             Internal output field derived from the validated
+%                                      grad_reference_finite_difference_error_tol and shrink.
 
-% Define the list of allowed fields.
-field_list = {
-    'MaxFunctionEvaluations'
-    'ftarget'
-    'StepTolerance'
-    'use_function_value_stop'
-    'func_window_size'
-    'func_tol'
-    'use_estimated_gradient_stop'
-    'grad_window_size'
-    'grad_tol'
-    'lipschitz_constant'
-    'use_gradient_reference_consistency'
-    'grad_reference_finite_difference_error_tol'
-    'Algorithm'
-    'direction_set'
-    'num_blocks'
-    'batch_size'
-    'replacement_delay'
-    'grouped_direction_indices'
-    'block_visiting_pattern'
-    'alpha_init'
-    'expand'
-    'shrink'
-    'is_noisy'
-    'forcing_function'
-    'reduction_factor'
-    'polling_inner'
-    'cycling_inner'
-    'seed'
-    'output_xhist'
-    'output_alpha_hist'
-    'output_block_hist'
-    'output_grad_hist'
-    'iprint'
-    'debug_flag'
-    };
-
-% Get the field names of options and convert to cell array of strings.
-field_names = fieldnames(options);
-% Check for unknown fields. If any unknown fields are found, throw an error.
-% Rationale: Using a warning here might allow the program to continue execution,
-% which could lead to unexpected behavior if the user provided incorrect or
-% misspelled field names. Additionally, some MATLAB environments or configurations
-% might suppress warnings, making it harder for users to identify the issue.
-% By throwing an error, we ensure that the user is immediately notified of the
-% problem and can correct the input options before proceeding.
-unknown_fields = field_names(~ismember(field_names, field_list));
-if ~isempty(unknown_fields)
-    error('BDS:set_options:UnknownField', ...
-        'The following fields in options are not recognized: %s', strjoin(unknown_fields, ', '));
+if isfield(options, 'grad_reference_relative_tol')
+    error('BDS:RemovedGradientReferenceRelativeTolerance', ...
+        ['options.grad_reference_relative_tol has been removed; use ', ...
+        'options.grad_tol for the single reference-scaled threshold.']);
 end
-
-% At this point, all fields in options are valid field names, as any unknown fields
-% have already caused an error earlier. The next step ensures that
-% the values associated with these fields are valid. If any field contains an
-% invalid value, the validate_options function will throw an error and terminate
-% execution. This strict validation ensures that the options structure is fully
-% consistent before proceeding.
-options = validate_options(options, n);
-
-% Although the field names are valid and the corresponding values are valid after the above step,
-% conflicts may arise if the user provides values for some certain fields simultaneously.
-% We need to resolve such priority issues to avoid ambiguity. The following procedures
-% handle such conflicts and set default values for missing fields.
-
-% Set the maximum number of function evaluations.
-% If the options do not contain MaxFunctionEvaluations,
-% it is set to MaxFunctionEvaluations_dim_factor*n, where n is the dimension of the problem.
-if ~isfield(options, "MaxFunctionEvaluations")
-    options.MaxFunctionEvaluations = get_default_constant("MaxFunctionEvaluations_dim_factor")*n;
-end
-
-% We handle Algorithm early because it determines defaults for num_blocks, batch_size, etc.
-if isfield(options, 'Algorithm')
-    if any(isfield(options, {'block_visiting_pattern', 'num_blocks', 'batch_size'}))
-        warning('Algorithm and block_visiting_pattern/num_blocks/batch_size are mutually exclusive. Algorithm will be used.');
-        % Remove block_visiting_pattern, num_blocks, and batch_size from options.
-        options = rmfield(options, intersect(fieldnames(options), {'block_visiting_pattern', 'num_blocks', 'batch_size'}));
+% We handle Algorithm early because it determines the values of num_blocks,
+% batch_size, and block_visiting_pattern.
+if isfield(options, 'Algorithm') && ~isempty(options.Algorithm)
+    algorithm = options.Algorithm;
+    if ~(ischarstr(algorithm) ...
+            && any(ismember(lower(string(algorithm)), ["cbds", "pbds", "pads", "rbds", "ds"])))
+        error('BDS:InvalidAlgorithm', ...
+            'options.Algorithm must be one of: cbds, pbds, pads, rbds, ds.');
     end
-    options.Algorithm = lower(options.Algorithm);
-    switch lower(options.Algorithm)
+    algorithm = char(lower(string(algorithm)));
+
+    fields_conflicting_with_algorithm = intersect(fieldnames(options), ...
+        {'block_visiting_pattern', 'num_blocks', 'batch_size'});
+    if ~isempty(fields_conflicting_with_algorithm)
+        warning('BDS:AlgorithmPriority', ...
+            ['Algorithm and block_visiting_pattern/num_blocks/batch_size are ', ...
+            'mutually exclusive. Algorithm will be used.']);
+        options = rmfield(options, fields_conflicting_with_algorithm);
+    end
+
+    switch algorithm
         case 'cbds'
             options.num_blocks = n;
             options.batch_size = n;
@@ -122,191 +59,399 @@ if isfield(options, 'Algorithm')
             options.num_blocks = n;
             options.batch_size = 1;
             options.block_visiting_pattern = 'random';
+        case 'ds'
+            options.num_blocks = 1;
+            options.batch_size = 1;
         case 'pads'
             options.num_blocks = n;
             options.batch_size = n;
             options.block_visiting_pattern = 'parallel';
-        case 'ds'
-            options.num_blocks = 1;
-            options.batch_size = 1;
     end
+    options.Algorithm = algorithm;
 end
 
-% Set the directions.
-if ~isfield(options, 'direction_set')
-    options.direction_set = eye(n);
+% Set the maximum number of function evaluations.
+options = set_default_if_missing(options, 'MaxFunctionEvaluations', ...
+    get_default_constant("MaxFunctionEvaluations_dim_factor") * n);
+if ~(isintegerscalar(options.MaxFunctionEvaluations) && options.MaxFunctionEvaluations > 0)
+    error('BDS:InvalidMaxFunctionEvaluations', ...
+        'options.MaxFunctionEvaluations must be a positive integer.');
 end
+options.MaxFunctionEvaluations = double(options.MaxFunctionEvaluations);
 
-% Set the number of blocks (num_blocks) if it is not provided.
-if ~isfield(options, 'num_blocks')
-    options.num_blocks = n;
+% Set the number of blocks and the number of blocks visited in each iteration.
+options = set_default_if_missing(options, 'num_blocks', n);
+if ~(isintegerscalar(options.num_blocks) && options.num_blocks > 0 && options.num_blocks <= n)
+    error('BDS:InvalidNumBlocks', ...
+        'options.num_blocks must be a positive integer not exceeding n.');
 end
+options.num_blocks = double(options.num_blocks);
+options = set_default_if_missing(options, 'batch_size', options.num_blocks);
+if ~(isintegerscalar(options.batch_size) && options.batch_size > 0)
+    error('BDS:InvalidBatchSize', ...
+        'options.batch_size must be a positive integer.');
+end
+if options.batch_size > options.num_blocks || options.batch_size > n
+    error('BDS:InvalidBatchSize', ...
+        'options.batch_size cannot exceed options.num_blocks or n.');
+end
+options.batch_size = double(options.batch_size);
+options = set_default_if_missing(options, 'replacement_delay', ...
+    floor(options.num_blocks / options.batch_size) - 1);
+if ~(isintegerscalar(options.replacement_delay) && options.replacement_delay >= 0)
+    error('BDS:InvalidReplacementDelay', ...
+        'options.replacement_delay must be a nonnegative integer.');
+end
+if options.replacement_delay > floor(options.num_blocks / options.batch_size) - 1
+    error('BDS:InvalidReplacementDelay', ...
+        'options.replacement_delay cannot exceed floor(num_blocks / batch_size) - 1.');
+end
+options.replacement_delay = double(options.replacement_delay);
+options = set_default_if_missing(options, 'block_visiting_pattern', ...
+    get_default_constant("block_visiting_pattern"));
+if ~(ischarstr(options.block_visiting_pattern) ...
+        && any(ismember(lower(string(options.block_visiting_pattern)), ...
+        ["sorted", "random", "parallel"])))
+    error('BDS:InvalidBlockVisitingPattern', ...
+        'options.block_visiting_pattern must be one of: sorted, random, parallel.');
+end
+options.block_visiting_pattern = char(lower(string(options.block_visiting_pattern)));
+options = set_default_if_missing(options, 'direction_set', eye(n));
+if ~(ismatrix(options.direction_set) ...
+        && size(options.direction_set, 1) == n && size(options.direction_set, 2) == n)
+    error('BDS:InvalidDirectionSet', ...
+        'options.direction_set must be an n-by-n matrix.');
+end
+validate_grouped_direction_indices(options, n, options.num_blocks);
 
-% Set the step size threshold for termination. The algorithm terminates when the step size for each 
-% block falls below their corresponding threshold.
-% If StepTolerance is not provided, it is set to 1e-6 for each block.
-% If StepTolerance is a numeric vector, its length must match options.num_blocks.
-if isfield(options, "StepTolerance")
-    if isscalar(options.StepTolerance)
-        options.StepTolerance = options.StepTolerance * ones(options.num_blocks, 1);
-    elseif isnumvec(options.StepTolerance) && length(options.StepTolerance) == options.num_blocks
-        options.StepTolerance = options.StepTolerance(:);
-    else
-        error('BDS:set_options:InvalidStepToleranceLength', ...
-            'Length of options.StepTolerance must match options.num_blocks.');
-    end
+% Set the options related to the termination criteria.
+options = set_default_if_missing(options, 'ftarget', get_default_constant("ftarget"));
+if ~isrealscalar(options.ftarget)
+    error('BDS:InvalidFtarget', ...
+        'options.ftarget must be a real scalar.');
+end
+options = set_default_if_missing(options, 'use_function_value_stop', ...
+    get_default_constant("use_function_value_stop"));
+validate_logical_scalar( ...
+    options.use_function_value_stop, 'use_function_value_stop');
+options = set_default_if_missing(options, 'func_window_size', ...
+    get_default_constant("func_window_size"));
+options.func_window_size = normalize_positive_integer(options.func_window_size, 'func_window_size');
+options = set_default_if_missing(options, 'func_tol', get_default_constant("func_tol"));
+validate_positive_real_scalar(options.func_tol, 'func_tol');
+options = set_default_if_missing(options, 'use_estimated_gradient_stop', ...
+    get_default_constant("use_estimated_gradient_stop"));
+validate_logical_scalar( ...
+    options.use_estimated_gradient_stop, 'use_estimated_gradient_stop');
+options = set_default_if_missing(options, 'grad_window_size', ...
+    get_default_constant("grad_window_size"));
+options.grad_window_size = normalize_positive_integer(options.grad_window_size, 'grad_window_size');
+options = set_default_if_missing(options, 'grad_tol', get_default_constant("grad_tol"));
+validate_positive_real_scalar(options.grad_tol, 'grad_tol');
+options = set_default_if_missing(options, 'lipschitz_constant', ...
+    get_default_constant("lipschitz_constant"));
+validate_positive_real_scalar( ...
+    options.lipschitz_constant, 'lipschitz_constant');
+options = set_default_if_missing(options, 'use_gradient_reference_consistency', ...
+    get_default_constant("use_gradient_reference_consistency"));
+validate_logical_scalar( ...
+    options.use_gradient_reference_consistency, ...
+    'use_gradient_reference_consistency');
+options = set_default_if_missing(options, ...
+    'grad_reference_finite_difference_error_tol', ...
+    get_default_constant( ...
+    "grad_reference_finite_difference_error_tol"));
+validate_positive_real_scalar( ...
+    options.grad_reference_finite_difference_error_tol, ...
+    'grad_reference_finite_difference_error_tol');
+% Set the threshold for the step sizes.
+options = set_default_if_missing(options, 'StepTolerance', ...
+    get_default_constant("StepTolerance"));
+if ~(isnumeric(options.StepTolerance) && isreal(options.StepTolerance) ...
+        && (isscalar(options.StepTolerance) ...
+        || (isvector(options.StepTolerance) ...
+        && numel(options.StepTolerance) == options.num_blocks)) ...
+        && all(isfinite(options.StepTolerance(:))) ...
+        && all(options.StepTolerance(:) >= 0))
+    error('BDS:InvalidStepTolerance', ...
+        ['options.StepTolerance must be a finite nonnegative real numeric ', ...
+        'scalar or a num_blocks-vector.']);
+end
+if isscalar(options.StepTolerance)
+    options.StepTolerance = double(options.StepTolerance) * ones(options.num_blocks, 1);
 else
-    options.StepTolerance = 1e-6 * ones(options.num_blocks, 1);
-end
-
-% Set the value of batch_size.
-if ~isfield(options, 'batch_size')
-    options.batch_size = options.num_blocks;
-elseif options.batch_size > options.num_blocks
-    error('BDS:set_options:BatchSizeTooLarge', ...
-        'options.batch_size cannot exceed options.num_blocks.');
-end
-
-% If replacement_delay is r, the block selected in the current iteration will not
-% be selected again in the next r iterations.
-% While a larger replacement_delay can potentially improve performance, we set it
-% to the maximum allowable value to prioritize performance.
-% Note that replacement_delay cannot exceed floor(num_blocks/batch_size) - 1.
-if isfield(options, "replacement_delay")
-    if options.replacement_delay > floor(options.num_blocks/options.batch_size) - 1
-        error('BDS:set_options:InvalidReplacementDelay', ...
-            'options.replacement_delay cannot exceed floor(options.num_blocks/options.batch_size) - 1.');
-    end
-else
-    options.replacement_delay = floor(options.num_blocks/options.batch_size) - 1;
-end
-
-% Set the default value of block_visiting_pattern if it is not provided.
-if ~isfield(options, 'block_visiting_pattern')
-    options.block_visiting_pattern = get_default_constant("block_visiting_pattern");
+    options.StepTolerance = double(options.StepTolerance(:));
 end
 
 % Set the initial step sizes.
-% If options do not contain the field of alpha_init, then the initial step size of each block is set
-% to 1. 
-% If alpha_init is a positive scalar, then the initial step size of each block is set to 
-% alpha_init. 
-% If alpha_init is a vector, then the initial step size of the i-th block is set to 
-% alpha_init(i). We first verify it is a numeric vector to avoid accepting strings that happen
-% to have the same length (for example, 'auto' when num_blocks = 4).
-% If alpha_init is "auto", then use a fminsearch-inspired scale-aware rule
-% adapted to BDS polling steps: nonzero coordinates receive max(abs(x0),
-% StepTolerance), exact zero coordinates keep the neutral unit step, and
-% block steps are the maximum coordinate steps in each block.
-if isfield(options, "alpha_init")
-    if isrealscalar(options.alpha_init)
-        options.alpha_init = options.alpha_init * ones(options.num_blocks, 1);
-    elseif isnumvec(options.alpha_init) && (length(options.alpha_init) == options.num_blocks)
-        options.alpha_init = options.alpha_init(:);
-    elseif strcmpi(options.alpha_init, "auto")
-        grouped_direction_indices = divide_direction_set(n, options.num_blocks, options);
-        alpha_block = zeros(options.num_blocks, 1);
-        for i = 1:options.num_blocks
-            direction_indices = grouped_direction_indices{i};
-            coordinate_indices = unique(ceil(direction_indices(:) / 2));
-            alpha_coord = get_auto_alpha_init( ...
-                x0(coordinate_indices), options.StepTolerance(i), 1, 1);
-            alpha_block(i) = max(alpha_coord);
-        end
-        options.alpha_init = alpha_block;
-    else
-        error('BDS:set_options:InvalidAlphaInit', ...
-            'options.alpha_init must be a positive scalar, a vector of length options.num_blocks, or "auto".');
-    end
+options = set_default_if_missing(options, 'alpha_init', ...
+    get_default_constant("alpha_init"));
+options.alpha_init = normalize_alpha_init(options.alpha_init, options.num_blocks, n, x0, options.StepTolerance);
+
+% Set the expanding and shrinking factors.
+options = set_default_if_missing(options, 'is_noisy', ...
+    get_default_constant("is_noisy"));
+validate_logical_scalar(options.is_noisy, 'is_noisy');
+if options.is_noisy
+    options = set_default_if_missing(options, 'expand', ...
+        get_default_constant("expand_noisy"));
+    options = set_default_if_missing(options, 'shrink', ...
+        get_default_constant("shrink_noisy"));
 else
-    options.alpha_init = ones(options.num_blocks, 1);
+    options = set_default_if_missing(options, 'expand', ...
+        get_default_constant("expand"));
+    options = set_default_if_missing(options, 'shrink', ...
+        get_default_constant("shrink"));
+end
+if ~(isrealscalar(options.expand) && options.expand >= 1)
+    error('BDS:InvalidExpand', ...
+        'options.expand must be a real scalar >= 1.');
+end
+if ~(isrealscalar(options.shrink) && options.shrink > 0 && options.shrink < 1)
+    error('BDS:InvalidShrink', ...
+        'options.shrink must be a real scalar in (0, 1).');
 end
 
-% Set whether the objective function is noisy.
-% Note: is_noisy determines the defaults for expand and shrink, so it must be set first before
-% setting expand and shrink.
-if ~isfield(options, 'is_noisy')
-    options.is_noisy = get_default_constant("is_noisy");
-end
-
-% Set default expand and shrink values.
-% The defaults depend only on whether the problem is noisy.
-if isfield(options, "is_noisy") && options.is_noisy
-    expand = get_default_constant("expand_noisy");
-    shrink = get_default_constant("shrink_noisy");
-else
-    expand = get_default_constant("expand");
-    shrink = get_default_constant("shrink");
-end
-
-% Set the values of options.expand and options.shrink.
-% The values of expand and shrink have been determined earlier based only on
-% whether the problem is noisy. If the user has not provided values for expand
-% or shrink, the precomputed default values are used. Since the options
-% structure has already been validated by remove_invalid_options, any
-% user-provided values are assumed to be valid and will not be overwritten.
-if ~isfield(options, "expand")
-    options.expand = expand;
-end
-if ~isfield(options, "shrink")
-    options.shrink = shrink;
-end
-
-% The above procedures handle some fields that depend on problem-specific information and are not
-% determined solely by user input.
-% We define a list of fields that are either handled manually above or should not
-% be filled by get_default_constant.
-manual_fields = {'MaxFunctionEvaluations', 'Algorithm', 'direction_set', 'num_blocks', ...
-                'StepTolerance', 'batch_size', 'replacement_delay', 'block_visiting_pattern', ...
-                'alpha_init', 'is_noisy', 'expand', 'shrink', 'grouped_direction_indices'};
-
-% For the remaining fields, set default values using get_default_constant if they are missing.
-% We iterate through field_list to maintain the order defined in bds.m.
-for i = 1:length(field_list)
-    field_name = field_list{i};
-    if ~ismember(field_name, manual_fields)
-        if ~isfield(options, field_name)
-            % Get the default value of those fields that are not related to the problem information
-            % from the get_default_constant function.
-            options.(field_name) = get_default_constant(field_name);
-        end
-    end
-end
-
-% Two gradient estimates at the same base point use step sizes h and
-% shrink*h. The leading error of a central difference is proportional to
-% h^2, so their leading difference is (1-shrink^2) times the error at h.
-% Convert the public relative finite-difference error tolerance into the raw
-% consistency threshold applied to the two reconstructed gradients.
+% Let theta = options.shrink. For a fixed polling direction, denote by D_h and
+% D_{theta*h} the central-difference estimates obtained with step sizes h and
+% theta*h. Their leading truncation errors satisfy
+%
+%   D_h         = D + c*h^2         + O(h^4),
+%   D_{theta*h} = D + c*theta^2*h^2 + O(h^4).
+%
+% Hence, D_h - D_{theta*h} has leading term c*(1-theta^2)*h^2, whereas the
+% leading error of the finer estimate D_{theta*h} is c*theta^2*h^2. The error
+% of the finer estimate is therefore approximated by
+%
+%   theta^2/(1-theta^2) * abs(D_h - D_{theta*h}).
+%
+% Consequently, if grad_reference_finite_difference_error_tol bounds the
+% relative error of the finer estimate, the corresponding raw threshold for
+% the relative difference between the two estimates is
+%
+%   grad_reference_finite_difference_error_tol * (1-theta^2)/theta^2.
+%
+% This is a leading-order calibration for reconstructed gradients, not an
+% exact error identity. With theta=0.5 and the default tolerance 1/30, the
+% resulting grad_reference_raw_tol is 0.1.
 options.grad_reference_raw_tol = ...
     options.grad_reference_finite_difference_error_tol ...
     * (1 - options.shrink^2) / options.shrink^2;
 
-% Initialize alpha_hist if output_alpha_hist is true and alpha_hist does not exceed the
-% maximum memory size allowed.
-% Both NaN and zero have the same memory allocation in MATLAB, as they are stored
-% as double-precision floating-point numbers. For the purpose of memory allocation
-% testing, either NaN or zero can be used interchangeably. Here, nan is chosen
-% arbitrarily, as the choice does not affect subsequent computations.
-if options.output_alpha_hist
-    try
-        % Test allocation of alpha_hist whether it exceeds the maximum memory size allowed.
-        alpha_hist_test = nan(options.num_blocks, options.MaxFunctionEvaluations);
-        clear alpha_hist_test
-    catch
-        options.output_alpha_hist = false;
-        warning("alpha_hist will not be included in the output due to the limit of memory.")
-    end
+% Set the remaining polling and randomization options.
+options = set_default_if_missing(options, 'forcing_function', ...
+    get_default_constant("forcing_function"));
+if ~isa(options.forcing_function, 'function_handle')
+    error('BDS:InvalidForcingFunction', ...
+        'options.forcing_function must be a function handle.');
 end
-% If xhist exceeds the maximum memory size allowed, then we will not output xhist.
-if  options.output_xhist
+try
+    forcing_function_test_output = options.forcing_function(1);
+catch
+    error('BDS:InvalidForcingFunction', ...
+        'options.forcing_function must accept scalar input.');
+end
+if ~isscalar(forcing_function_test_output)
+    error('BDS:InvalidForcingFunction', ...
+        'options.forcing_function must return a scalar for scalar input.');
+end
+options = set_default_if_missing(options, 'reduction_factor', ...
+    get_default_constant("reduction_factor"));
+if ~(isnumvec(options.reduction_factor) && numel(options.reduction_factor) == 3)
+    error('BDS:InvalidReductionFactor', ...
+        'options.reduction_factor must be a 3-dimensional real vector.');
+end
+options.reduction_factor = options.reduction_factor(:)';
+if ~(options.reduction_factor(1) <= options.reduction_factor(2) ...
+        && options.reduction_factor(2) <= options.reduction_factor(3) ...
+        && options.reduction_factor(1) >= 0 ...
+        && options.reduction_factor(2) > 0)
+    error('BDS:InvalidReductionFactor', ...
+        ['options.reduction_factor must satisfy reduction_factor(1) <= ', ...
+        'reduction_factor(2) <= reduction_factor(3), reduction_factor(1) >= 0, ', ...
+        'and reduction_factor(2) > 0.']);
+end
+options = set_default_if_missing(options, 'polling_inner', ...
+    get_default_constant("polling_inner"));
+if ~(ischarstr(options.polling_inner) ...
+        && any(ismember(lower(string(options.polling_inner)), ["opportunistic", "complete"])))
+    error('BDS:InvalidPollingInner', ...
+        'options.polling_inner must be one of: opportunistic, complete.');
+end
+options.polling_inner = char(lower(string(options.polling_inner)));
+options = set_default_if_missing(options, 'cycling_inner', ...
+    get_default_constant("cycling_inner"));
+if ~(isintegerscalar(options.cycling_inner) ...
+        && options.cycling_inner >= 0 && options.cycling_inner <= 3)
+    error('BDS:InvalidCyclingInner', ...
+        'options.cycling_inner must be an integer in {0,1,2,3}.');
+end
+options.cycling_inner = double(options.cycling_inner);
+options = set_default_if_missing(options, 'seed', get_default_constant("seed"));
+if ~(ischarstr(options.seed) && strcmpi(options.seed, 'shuffle'))
+    if ~(isintegerscalar(options.seed) && options.seed >= 0 && options.seed <= 2^32 - 1)
+        error('BDS:InvalidSeed', ...
+            'options.seed must be an integer in [0, 2^32 - 1] or "shuffle".');
+    end
+    options.seed = double(options.seed);
+end
+
+% Set the output and debugging options.
+options = set_default_if_missing(options, 'output_xhist', ...
+    get_default_constant("output_xhist"));
+validate_logical_scalar(options.output_xhist, 'output_xhist');
+if options.output_xhist
     try
-        % Test allocation of xhist whether it exceeds the maximum memory size allowed.
-        xhist_test = nan(n, options.MaxFunctionEvaluations);
-        clear xhist_test
+        xhist_allocation_test = nan(n, options.MaxFunctionEvaluations);
+        clear xhist_allocation_test
     catch
         options.output_xhist = false;
-        warning("xhist will be not included in the output due to the limit of memory.");
+        warning('BDS:XhistMemory', ...
+            'xhist will not be included in the output due to the limit of memory.');
     end
+end
+options = set_default_if_missing(options, 'output_alpha_hist', ...
+    get_default_constant("output_alpha_hist"));
+validate_logical_scalar(options.output_alpha_hist, 'output_alpha_hist');
+if options.output_alpha_hist
+    try
+        alpha_hist_allocation_test = nan(options.num_blocks, options.MaxFunctionEvaluations);
+        clear alpha_hist_allocation_test
+    catch
+        options.output_alpha_hist = false;
+        warning('BDS:AlphaHistMemory', ...
+            'alpha_hist will not be included in the output due to the limit of memory.');
+    end
+end
+options = set_default_if_missing(options, 'output_block_hist', ...
+    get_default_constant("output_block_hist"));
+validate_logical_scalar(options.output_block_hist, 'output_block_hist');
+options = set_default_if_missing(options, 'output_grad_hist', ...
+    get_default_constant("output_grad_hist"));
+validate_logical_scalar(options.output_grad_hist, 'output_grad_hist');
+options = set_default_if_missing(options, 'iprint', ...
+    get_default_constant("iprint"));
+if ~(isintegerscalar(options.iprint) && options.iprint >= 0 && options.iprint <= 3)
+    error('BDS:InvalidIprint', ...
+        'options.iprint must be an integer in {0,1,2,3}.');
+end
+options.iprint = double(options.iprint);
+options = set_default_if_missing(options, 'debug_flag', ...
+    get_default_constant("debug_flag"));
+validate_logical_scalar(options.debug_flag, 'debug_flag');
+
+% Set the acceleration options.
+options = set_default_if_missing(options, 'productive_direction_memory_size', ...
+    max(1, min(n, get_default_constant( ...
+    "productive_direction_memory_size_cap"))));
+options.productive_direction_memory_size = normalize_positive_integer( ...
+    options.productive_direction_memory_size, 'productive_direction_memory_size');
+options = set_default_if_missing(options, 'momentum_decay', ...
+    get_default_constant("momentum_decay"));
+if ~(isrealscalar(options.momentum_decay) ...
+        && options.momentum_decay >= 0 && options.momentum_decay < 1)
+    error('BDS:InvalidMomentumDecay', ...
+        'options.momentum_decay must be a real scalar in [0, 1).');
+end
+options = set_default_if_missing(options, 'use_productive_direction_memory', ...
+    get_default_constant("use_productive_direction_memory"));
+validate_logical_scalar( ...
+    options.use_productive_direction_memory, 'use_productive_direction_memory');
+options = set_default_if_missing(options, 'use_iteration_pattern_step', ...
+    get_default_constant("use_iteration_pattern_step"));
+validate_logical_scalar( ...
+    options.use_iteration_pattern_step, 'use_iteration_pattern_step');
+options = set_default_if_missing(options, 'use_momentum_extrapolation', ...
+    get_default_constant("use_momentum_extrapolation"));
+validate_logical_scalar( ...
+    options.use_momentum_extrapolation, 'use_momentum_extrapolation');
+end
+
+function options = set_default_if_missing(options, name, value)
+if ~isfield(options, name) || isempty(options.(name))
+    options.(name) = value;
+end
+end
+
+function validate_grouped_direction_indices(options, n, num_blocks)
+if ~isfield(options, 'grouped_direction_indices') || isempty(options.grouped_direction_indices)
+    return;
+end
+if ~iscell(options.grouped_direction_indices)
+    error('BDS:InvalidGroupedDirectionIndices', ...
+        'options.grouped_direction_indices must be a cell array.');
+end
+if numel(options.grouped_direction_indices) ~= num_blocks
+    error('BDS:InvalidGroupedDirectionIndices', ...
+        'The length of options.grouped_direction_indices must equal options.num_blocks.');
+end
+
+used_dimension_mask = false(1, n);
+num_used_indices = 0;
+for k = 1:num_blocks
+    group = options.grouped_direction_indices{k};
+    if ~(isnumeric(group) && isvector(group) && all(isfinite(group)) ...
+            && all(group == floor(group)) && all(group >= 1) && all(group <= n) ...
+            && numel(unique(group)) == numel(group))
+        error('BDS:InvalidGroupedDirectionIndices', ...
+            ['Each group in options.grouped_direction_indices must contain ', ...
+            'unique integer dimension indices between 1 and n.']);
+    end
+    used_dimension_mask(group) = true;
+    num_used_indices = num_used_indices + numel(group);
+end
+if num_used_indices ~= n || ~all(used_dimension_mask)
+    error('BDS:InvalidGroupedDirectionIndices', ...
+        'options.grouped_direction_indices must partition 1:n exactly once.');
+end
+end
+
+function alpha_init = normalize_alpha_init(alpha_init, num_blocks, n, x0, StepTolerance)
+if ischarstr(alpha_init) && strcmpi(alpha_init, 'auto')
+    if num_blocks ~= n
+        error('BDS:InvalidAlphaInit', ...
+            'options.alpha_init = "auto" is supported only when options.num_blocks equals n.');
+    end
+    if any(~isfinite(x0))
+        error('BDS:InvalidX0', ...
+            'x0 must contain only finite values when options.alpha_init = "auto".');
+    end
+    alpha_init = get_auto_alpha_init(x0, StepTolerance, 1, 1);
+    return;
+end
+if ~(isnumeric(alpha_init) && isreal(alpha_init) ...
+        && (isscalar(alpha_init) ...
+        || (isvector(alpha_init) && numel(alpha_init) == num_blocks)) ...
+        && all(isfinite(alpha_init(:))) && all(alpha_init(:) > 0))
+    error('BDS:InvalidAlphaInit', ...
+        ['options.alpha_init must be a finite positive real numeric scalar, ', ...
+        'a num_blocks-vector, or "auto".']);
+end
+if isscalar(alpha_init)
+    alpha_init = double(alpha_init) * ones(num_blocks, 1);
+else
+    alpha_init = double(alpha_init(:));
+end
+end
+
+function validate_logical_scalar(value, name)
+if ~(islogical(value) && isscalar(value))
+    error('BDS:InvalidLogicalOption', ...
+        'options.%s must be a logical scalar.', name);
+end
+end
+
+function value = normalize_positive_integer(value, name)
+if ~(isintegerscalar(value) && value > 0)
+    error('BDS:InvalidPositiveIntegerOption', ...
+        'options.%s must be a positive integer.', name);
+end
+value = double(value);
+end
+
+function validate_positive_real_scalar(value, name)
+if ~(isrealscalar(value) && value > 0)
+    error('BDS:InvalidPositiveRealOption', ...
+        'options.%s must be a positive real scalar.', name);
 end
 end

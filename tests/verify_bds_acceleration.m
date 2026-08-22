@@ -1,12 +1,13 @@
 function verify_bds_acceleration()
-%VERIFY_BDS_ACCELERATION Strict checks for accelerated_bds_options.
+%VERIFY_BDS_ACCELERATION Strict checks for the production BDS accelerations.
 %
 % This verification has two acceptance targets:
 %
-%   1. With all acceleration switches off, accelerated_bds_options.m must
-%      match bds.m for the same Algorithm and the same explicit options.
+%   1. With all acceleration switches off, bds.m must match the frozen
+%      pre-acceleration BDS reference for the same Algorithm and explicit
+%      options.
 %   2. With all acceleration switches on and the default/CBDS base algorithm,
-%      accelerated_bds_options.m must match the fixed lean_evolved_bds.m reference.
+%      bds.m must match the independent lean_evolved_bds.m reference.
 
 path_tests = fileparts(mfilename('fullpath'));
 path_root = fileparts(path_tests);
@@ -18,20 +19,20 @@ addpath(fullfile(path_tests, 'competitors'));
 addpath(fullfile(path_root, 'src'));
 cd(path_tests);
 
-fprintf('\nRunning accelerated BDS options verification...\n');
+fprintf('\nRunning production BDS acceleration verification...\n');
 
-verify_acceleration_off_matches_bds(oldfolder);
+verify_acceleration_off_matches_reference(oldfolder);
 verify_acceleration_on_matches_lean(oldfolder, false);
 verify_acceleration_on_matches_lean(oldfolder, true);
 
-fprintf('\nAccelerated BDS options verification passed.\n');
-fprintf(['  off: accelerated_bds_options.m == bds.m for ', ...
+fprintf('\nProduction BDS acceleration verification passed.\n');
+fprintf(['  off: bds.m == bds_without_acceleration_reference.m for ', ...
     'Algorithm=cbds/pbds/rbds/pads/ds, with matching explicit options.\n']);
-fprintf('  on : accelerated_bds_options.m == lean_evolved_bds.m for default and Algorithm=cbds.\n');
+fprintf('  on : bds.m == lean_evolved_bds.m for default and Algorithm=cbds.\n');
 
 end
 
-function verify_acceleration_off_matches_bds(oldfolder)
+function verify_acceleration_off_matches_reference(oldfolder)
 
 dims = 1:5;
 ir_values = 0:17;
@@ -43,7 +44,7 @@ for algorithm = algorithms
     options = base_iseqiv_options(oldfolder);
     options.Algorithm = char(algorithm);
     run_iseqiv_suite(label, ...
-        {@run_current_bds, @run_accelerated_bds_no_acceleration}, ...
+        {@run_frozen_bds_reference, @run_production_bds_no_acceleration}, ...
         dims, ir_values, seed_values, options);
 end
 
@@ -58,15 +59,15 @@ options = base_iseqiv_options(oldfolder);
 
 if use_algorithm_cbds
     label = 'acceleration-on-Algorithm-cbds-vs-lean';
-    accelerated_solver = @(fun, x0, solver_options) ...
-        run_accelerated_bds_lean(fun, x0, solver_options, true);
+    production_solver = @(fun, x0, solver_options) ...
+        run_production_bds_lean(fun, x0, solver_options, true);
 else
     label = 'acceleration-on-default-vs-lean';
-    accelerated_solver = @(fun, x0, solver_options) ...
-        run_accelerated_bds_lean(fun, x0, solver_options, false);
+    production_solver = @(fun, x0, solver_options) ...
+        run_production_bds_lean(fun, x0, solver_options, false);
 end
 
-run_iseqiv_suite(label, {@run_lean_reference, accelerated_solver}, ...
+run_iseqiv_suite(label, {@run_lean_reference, production_solver}, ...
     dims, ir_values, seed_values, options);
 
 end
@@ -112,27 +113,31 @@ options.sequential = false;
 
 end
 
-function [xopt, fopt, exitflag, output] = run_current_bds(fun, x0, options)
+function [xopt, fopt, exitflag, output] = run_frozen_bds_reference(fun, x0, options)
 
-[xopt, fopt, exitflag, output] = bds(fun, x0, options);
+if ~isfield(options, 'expand')
+    options.expand = 1.8;
+end
+[xopt, fopt, exitflag, output] = ...
+    bds_without_acceleration_reference(fun, x0, options);
 
 end
 
-function [xopt, fopt, exitflag, output] = run_accelerated_bds_no_acceleration(fun, x0, options)
+function [xopt, fopt, exitflag, output] = run_production_bds_no_acceleration(fun, x0, options)
 
 options.use_productive_direction_memory = false;
 options.use_iteration_pattern_step = false;
 options.use_momentum_extrapolation = false;
 
-% bds.m and accelerated_bds_options.m intentionally have different historical
-% defaults in a few places. The all-off comparison is about identical behavior
-% under the same explicit solver parameters, so fill the BDS defaults that
-% iseqiv may omit.
+% Production BDS uses expand=2.0, whereas the frozen non-accelerated reference
+% uses 1.8. The all-off comparison fixes the historical reference value because
+% it checks the acceleration mechanism rather than the separately chosen public
+% default.
 if ~isfield(options, 'expand')
     options.expand = 1.8;
 end
 
-[xopt, fopt, exitflag, output] = accelerated_bds_options(fun, x0, options);
+[xopt, fopt, exitflag, output] = bds(fun, x0, options);
 
 end
 
@@ -147,21 +152,21 @@ output = lean_algorithmic_output(output);
 
 end
 
-function [xopt, fopt, exitflag, output] = run_accelerated_bds_lean( ...
+function [xopt, fopt, exitflag, output] = run_production_bds_lean( ...
         fun, x0, ~, use_algorithm_cbds)
 
-accel_options = struct();
+production_options = struct();
 if use_algorithm_cbds
-    accel_options.Algorithm = 'cbds';
+    production_options.Algorithm = 'cbds';
 end
-accel_options.use_productive_direction_memory = true;
-accel_options.use_iteration_pattern_step = true;
-accel_options.use_momentum_extrapolation = true;
+production_options.use_productive_direction_memory = true;
+production_options.use_iteration_pattern_step = true;
+production_options.use_momentum_extrapolation = true;
 
 % Keep the row-input/tough behavior used by the fixed reference comparison:
 % force the solver's internal input to a column without wrapping the objective.
 x0 = double(x0(:));
-[xopt, fopt, exitflag, output] = accelerated_bds_options(fun, x0, accel_options);
+[xopt, fopt, exitflag, output] = bds(fun, x0, production_options);
 output = lean_algorithmic_output(output);
 
 end

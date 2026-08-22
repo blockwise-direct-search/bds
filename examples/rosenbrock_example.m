@@ -5,9 +5,11 @@ function rosenbrock_example(options, x0)
 %
 %   ***********************************************************************
 %   Authors:    Haitian Li (hai-tian.li@connect.polyu.hk)
-%               and Zaikun ZHANG (zaikun.zhang@polyu.edu.hk)
+%               and Zaikun ZHANG (zhangzaikun@mail.sysu.edu.cn)
 %               Department of Applied Mathematics,
 %               The Hong Kong Polytechnic University
+%               School of Mathematics,
+%               Sun Yat-sen University
 %
 %   ***********************************************************************
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -23,10 +25,6 @@ end
 if nargin < 2
     x0 = [0; 0; 0];  % starting point
 end
-
-%options.MaxFunctionEvaluations = 1e4;
-%options.StepTolerance = eps;
-%options.StepTolerance = 1e-6;
 
 fullpath = mfilename("fullpath");
 path_examples = fileparts(fullpath);

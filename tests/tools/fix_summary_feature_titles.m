@@ -29,7 +29,7 @@ function fix_summary_feature_titles(pdf_file, feature_title)
     end
 
     fig = openfig(fig_file, 'invisible');
-    cleanup_fig = onCleanup(@() close_valid_figure(fig)); %#ok<NASGU>
+    cleanup_fig = onCleanup(@() close_valid_figure(fig));
 
     layouts = findall(fig, 'Type', 'tiledlayout');
     if isempty(layouts)

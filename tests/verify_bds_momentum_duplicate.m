@@ -2,17 +2,19 @@ function verify_bds_momentum_duplicate()
 %VERIFY_BDS_MOMENTUM_DUPLICATE Check exact duplicate suppression.
 
 tests_dir = fileparts(mfilename('fullpath'));
+root_dir = fileparts(tests_dir);
+old_path = path();
+addpath(fullfile(root_dir, 'src'));
 addpath(fullfile(tests_dir, 'competitors'));
-addpath(fullfile(tests_dir, 'misc'));
-cleanup = onCleanup(@() restore_paths(tests_dir));
+cleanup = onCleanup(@() path(old_path));
 
-verify_accelerated_budget_case();
+verify_production_budget_case();
 verify_reference_budget_case();
 verify_nontriggering_case();
 
 fprintf('BDS_MOMENTUM_DUPLICATE_OK\n');
 
-    function verify_accelerated_budget_case()
+    function verify_production_budget_case()
         calls = zeros(1, 0);
         options = struct('Algorithm', 'cbds', ...
             'MaxFunctionEvaluations', 4, ...
@@ -21,15 +23,15 @@ fprintf('BDS_MOMENTUM_DUPLICATE_OK\n');
             'use_iteration_pattern_step', true, ...
             'use_momentum_extrapolation', true, ...
             'output_xhist', true);
-        [~, ~, ~, output] = accelerated_bds_options(@counted_quadratic, 0, options);
+        [~, ~, ~, output] = bds(@counted_quadratic, 0, options);
 
         expected = [0, 1, 2, 3];
         assert(isequal(calls, expected), ...
-            'The accelerated budget case did not remove exactly the repeated point.');
+            'The production budget case did not remove exactly the repeated point.');
         assert(isequal(output.xhist, expected) && output.funcCount == numel(expected), ...
-            'The accelerated histories do not match the actual objective calls.');
+            'The production histories do not match the actual objective calls.');
         assert(isequal(output.fhist, [1, 0, 1, 4]), ...
-            'The accelerated function history is incorrect after the skip.');
+            'The production function history is incorrect after the skip.');
 
         function value = counted_quadratic(x)
             calls(end + 1) = x;
@@ -43,7 +45,7 @@ fprintf('BDS_MOMENTUM_DUPLICATE_OK\n');
         current_calls = run_reference_1d(@lean_evolved_bds);
 
         assert(isequal(legacy_calls(1:4), [0, 1, 2, 2]), ...
-            'The misc legacy copy does not expose the expected duplicate.');
+            'The legacy reference does not expose the expected duplicate.');
         assert(isequal(original_calls(1:4), [0, 1, 2, 3]), ...
             'The pre-termination lean snapshot did not preserve duplicate suppression.');
         assert(isequal(current_calls, original_calls), ...
@@ -70,9 +72,4 @@ fprintf('BDS_MOMENTUM_DUPLICATE_OK\n');
             'The current lean solver changed a nontriggering trajectory.');
     end
 
-end
-
-function restore_paths(tests_dir)
-rmpath(fullfile(tests_dir, 'misc'));
-rmpath(fullfile(tests_dir, 'competitors'));
 end

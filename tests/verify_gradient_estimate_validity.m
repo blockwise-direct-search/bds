@@ -18,69 +18,69 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
 
     function verify_valid_gradient_magnitudes()
         zero_results = run_validity_pair(@(x) 7);
-        assert(isequal(zero_results.bds.output.grad_hist, 0), ...
+        assert(isequal(zero_results.reference.output.grad_hist, 0), ...
             'An exact zero gradient was not recorded.');
 
         tiny_results = run_validity_pair(@tiny_gradient_objective);
-        tiny_norm = norm(tiny_results.bds.output.grad_hist);
+        tiny_norm = norm(tiny_results.reference.output.grad_hist);
         assert(tiny_norm > 0 && tiny_norm < 10 * eps, ...
             'A finite gradient below the former lower cutoff was not recorded.');
 
         large_results = run_validity_pair(@large_gradient_objective);
-        large_norm = norm(large_results.bds.output.grad_hist);
+        large_norm = norm(large_results.reference.output.grad_hist);
         assert(isfinite(large_norm) && large_norm > 1e30, ...
             'A finite gradient above the former upper cutoff was not recorded.');
     end
 
     function verify_nonfinite_gradients()
         nan_results = run_validity_pair(@nan_gradient_objective);
-        assert(isempty(nan_results.bds.output.grad_hist), ...
+        assert(isempty(nan_results.reference.output.grad_hist), ...
             'A gradient containing NaN was recorded.');
 
         inf_results = run_validity_pair(@inf_gradient_objective);
-        assert(isempty(inf_results.bds.output.grad_hist), ...
+        assert(isempty(inf_results.reference.output.grad_hist), ...
             'A gradient containing Inf was recorded.');
     end
 
     function results = run_validity_pair(objective)
         options = validity_options();
-        [results.bds, bds_calls] = run_bds(objective, options);
+        [results.reference, reference_calls] = run_reference(objective, options);
 
-        accelerated_options = options;
-        accelerated_options.use_productive_direction_memory = false;
-        accelerated_options.use_iteration_pattern_step = false;
-        accelerated_options.use_momentum_extrapolation = false;
-        [results.accelerated, accelerated_calls] = ...
-            run_accelerated(objective, accelerated_options);
+        production_options = options;
+        production_options.use_productive_direction_memory = false;
+        production_options.use_iteration_pattern_step = false;
+        production_options.use_momentum_extrapolation = false;
+        [results.production, production_calls] = ...
+            run_production(objective, production_options);
 
-        assert_same_bds_result(results.bds, results.accelerated);
-        assert(isequal(bds_calls, [0, 1, -1]) ...
-                && isequal(accelerated_calls, bds_calls), ...
+        assert_same_bds_result(results.reference, results.production);
+        assert(isequal(reference_calls, [0, 1, -1]) ...
+                && isequal(production_calls, reference_calls), ...
             'Gradient validity processing changed the objective-call sequence.');
-        assert_objective_accounting(results.bds, bds_calls);
-        assert_objective_accounting(results.accelerated, accelerated_calls);
+        assert_objective_accounting(results.reference, reference_calls);
+        assert_objective_accounting(results.production, production_calls);
     end
 
     function verify_acceleration_off_zero_gradient_stop()
         options = gradient_stop_options();
-        [bds_result, bds_calls] = run_bds(@(x) 7, options);
+        [reference_result, reference_calls] = run_reference(@(x) 7, options);
 
-        accelerated_options = options;
-        accelerated_options.use_productive_direction_memory = false;
-        accelerated_options.use_iteration_pattern_step = false;
-        accelerated_options.use_momentum_extrapolation = false;
-        [accelerated_result, accelerated_calls] = ...
-            run_accelerated(@(x) 7, accelerated_options);
+        production_options = options;
+        production_options.use_productive_direction_memory = false;
+        production_options.use_iteration_pattern_step = false;
+        production_options.use_momentum_extrapolation = false;
+        [production_result, production_calls] = ...
+            run_production(@(x) 7, production_options);
 
         expected_calls = [0, 1, -1, 0.5, -0.5, 0.25, -0.25];
-        assert(isequal(bds_calls, expected_calls) ...
-                && isequal(accelerated_calls, expected_calls), ...
+        assert(isequal(reference_calls, expected_calls) ...
+                && isequal(production_calls, expected_calls), ...
             'The acceleration-off zero-gradient stop occurred at the wrong evaluation.');
-        assert_same_bds_result(bds_result, accelerated_result);
-        assert(strcmp(bds_result.output.message, 'The estimated gradient is small.'), ...
+        assert_same_bds_result(reference_result, production_result);
+        assert(strcmp(reference_result.output.message, 'The estimated gradient is small.'), ...
             'The acceleration-off case did not stop on the zero gradient.');
-        assert_objective_accounting(bds_result, bds_calls);
-        assert_objective_accounting(accelerated_result, accelerated_calls);
+        assert_objective_accounting(reference_result, reference_calls);
+        assert_objective_accounting(production_result, production_calls);
     end
 
     function verify_acceleration_on_zero_gradient_stop()
@@ -90,8 +90,8 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
         options.use_momentum_extrapolation = true;
         options.use_gradient_reference_consistency = true;
         options.grad_reference_finite_difference_error_tol = 1/30;
-        [accelerated_result, accelerated_calls] = ...
-            run_accelerated(@(x) 7, options);
+        [production_result, production_calls] = ...
+            run_production(@(x) 7, options);
 
         lean_options = struct( ...
             'use_estimated_gradient_stop', true, ...
@@ -103,13 +103,13 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
         [lean_result, lean_calls] = run_lean(@(x) 7, lean_options, false);
 
         expected_calls = [0, 1, -1, 0.5, -0.5, 0.25, -0.25];
-        assert(isequal(accelerated_calls, expected_calls) ...
+        assert(isequal(production_calls, expected_calls) ...
                 && isequal(lean_calls, expected_calls), ...
             'The acceleration-on zero-gradient stop occurred at the wrong evaluation.');
-        assert_same_lean_result(accelerated_result, lean_result);
+        assert_same_lean_result(production_result, lean_result);
         assert(lean_result.exitflag == 5 && lean_result.output.iterations == 3, ...
             'The acceleration-on case did not stop on the zero gradient.');
-        assert_objective_accounting(accelerated_result, accelerated_calls);
+        assert_objective_accounting(production_result, production_calls);
     end
 
     function verify_nontriggering_lean_snapshot()
@@ -123,10 +123,10 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
             'no gradient estimate was available.']);
     end
 
-    function [result, calls] = run_bds(objective, options)
+    function [result, calls] = run_reference(objective, options)
         calls = zeros(1, 0);
         [result.x, result.f, result.exitflag, result.output] = ...
-            bds(@counted_objective, 0, options);
+            bds_without_acceleration_reference(@counted_objective, 0, options);
 
         function value = counted_objective(x)
             calls(end + 1) = x;
@@ -134,10 +134,10 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
         end
     end
 
-    function [result, calls] = run_accelerated(objective, options)
+    function [result, calls] = run_production(objective, options)
         calls = zeros(1, 0);
         [result.x, result.f, result.exitflag, result.output] = ...
-            accelerated_bds_options(@counted_objective, 0, options);
+            bds(@counted_objective, 0, options);
 
         function value = counted_objective(x)
             calls(end + 1) = x;
@@ -173,6 +173,7 @@ options = struct( ...
     'MaxFunctionEvaluations', 3, ...
     'StepTolerance', 1e-12, ...
     'alpha_init', 1, ...
+    'expand', 1.8, ...
     'seed', 0, ...
     'use_function_value_stop', false, ...
     'use_estimated_gradient_stop', false, ...
@@ -249,17 +250,17 @@ assert(isequaln(first.x, second.x) ...
         && isequaln(first.output.grad_xhist, second.output.grad_xhist) ...
         && isequaln(first.output.grad_iter, second.output.grad_iter) ...
         && strcmp(first.output.message, second.output.message), ...
-    'accelerated_bds_options with acceleration off differs from bds.');
+    'Production bds with acceleration off differs from the frozen reference.');
 
 end
 
-function assert_same_lean_result(accelerated, lean)
+function assert_same_lean_result(production, lean)
 
-assert(isequaln(accelerated.x, lean.x) ...
-        && isequaln(accelerated.f, lean.f) ...
-        && accelerated.exitflag == lean.exitflag ...
-        && accelerated.output.funcCount == lean.output.funcCount, ...
-    'accelerated_bds_options with acceleration on differs from lean_evolved_bds.');
+assert(isequaln(production.x, lean.x) ...
+        && isequaln(production.f, lean.f) ...
+        && production.exitflag == lean.exitflag ...
+        && production.output.funcCount == lean.output.funcCount, ...
+    'Production bds with acceleration on differs from lean_evolved_bds.');
 
 end
 

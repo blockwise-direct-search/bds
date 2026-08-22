@@ -207,7 +207,7 @@ function [solver_scores, profile_scores, curves] = profile_optiprofiler(options)
             case 'bds-infinite'
                 solvers{i} = @bds_default;
             case 'bds-finite'
-                solvers{i} = @bds_tmp_test;
+                solvers{i} = @bds_finite_test;
             case 'bds'
                 solvers{i} = @bds_test;
             case 'bds-default'
@@ -271,13 +271,13 @@ function [solver_scores, profile_scores, curves] = profile_optiprofiler(options)
             case {'ds-200n', 'ds_200n'}
                 solvers{i} = @ds_200n_test;
             case {'ds-baseline-200n', 'ds_baseline_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'ds', false, false, false, 200, 1e-6);
             case {'ds-pattern-momentum-200n', 'ds_pattern_momentum_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'ds', false, true, true, 200, 1e-6);
             case {'accelerated-ds-all-on-200n', 'accelerated_ds_all_on_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'ds', true, true, true, 200, 1e-6);
             case 'direct-search-orig'
                 solvers{i} = @ds_orig_test;
@@ -372,22 +372,22 @@ function [solver_scores, profile_scores, curves] = profile_optiprofiler(options)
             case {'cbds-500n', 'cbds_500n'}
                 solvers{i} = @cbds_500n_test;
             case {'cbds-baseline-200n', 'cbds_baseline_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'cbds', false, false, false, 200, 1e-6);
             case {'cbds-memory-only-200n', 'cbds_memory_only_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'cbds', true, false, false, 200, 1e-6);
             case {'cbds-pattern-only-200n', 'cbds_pattern_only_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'cbds', false, true, false, 200, 1e-6);
             case {'cbds-momentum-only-200n', 'cbds_momentum_only_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'cbds', false, false, true, 200, 1e-6);
             case {'cbds-pattern-momentum-200n', 'cbds_pattern_momentum_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'cbds', false, true, true, 200, 1e-6);
             case {'accelerated-bds-all-on-200n', 'accelerated_bds_all_on_200n'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_profile_test( ...
+                solvers{i} = @(fun, x0) bds_acceleration_profile_test( ...
                     fun, x0, 'cbds', true, true, true, 200, 1e-6);
             case 'cbds-development'
                 solvers{i} = @cbds_development_test;
@@ -457,22 +457,22 @@ function [solver_scores, profile_scores, curves] = profile_optiprofiler(options)
                 solvers{i} = @nomad_500n_test;
             case {'lean-evolved-bds', 'evolved-bds-lean'}
                 solvers{i} = @lean_evolved_bds_test;
-            case {'accelerated-bds', 'accelerated_bds', 'accelerated-bds-options', ...
-                    'accelerated_bds_options', 'lean-evolved-bds-full-options', ...
+            case {'bds-accelerated', 'bds_accelerated', 'accelerated-bds', ...
+                    'accelerated_bds', 'lean-evolved-bds-full-options', ...
                     'lean-evolved-bds-options', 'lean_evolved_bds_options'}
-                solvers{i} = @(fun, x0) accelerated_bds_options_test(fun, x0, true, true, true);
-            case {'accelerated-bds-budget-limited', 'accelerated_bds_budget_limited', ...
-                    'accelerated-bds-options-budget-limited', ...
-                    'accelerated_bds_options_budget_limited', ...
+                solvers{i} = @(fun, x0) bds_acceleration_test(fun, x0, true, true, true);
+            case {'bds-accelerated-budget-limited', 'bds_accelerated_budget_limited', ...
+                    'accelerated-bds-budget-limited', ...
+                    'accelerated_bds_budget_limited', ...
                     'lean-evolved-bds-options-budget-limited', ...
                     'lean_evolved_bds_options_budget_limited'}
-                solvers{i} = @accelerated_bds_options_budget_limited_test;
+                solvers{i} = @bds_acceleration_budget_limited_test;
             case 'lean-evolved-bds-no-memory'
-                solvers{i} = @(fun, x0) accelerated_bds_options_test(fun, x0, false, true, true);
+                solvers{i} = @(fun, x0) bds_acceleration_test(fun, x0, false, true, true);
             case 'lean-evolved-bds-memory-only'
-                solvers{i} = @(fun, x0) accelerated_bds_options_test(fun, x0, true, false, false);
+                solvers{i} = @(fun, x0) bds_acceleration_test(fun, x0, true, false, false);
             case 'lean-evolved-bds-pattern-momentum'
-                solvers{i} = @(fun, x0) accelerated_bds_options_test(fun, x0, false, true, true);
+                solvers{i} = @(fun, x0) bds_acceleration_test(fun, x0, false, true, true);
             case 'bds-no-additional-stopping'
                 solvers{i} = @cbds_simplified_test;
             case 'bds-simplified'
@@ -747,7 +747,6 @@ function [solver_scores, profile_scores, curves] = profile_optiprofiler(options)
     postprocess_summary_feature_titles(options, feature_display_name);
 
 end
-
 function postprocess_summary_feature_titles(options, feature_display_name)
 
     if isempty(feature_display_name) || ~isfield(options, 'savepath') || ~isfield(options, 'benchmark_id')
@@ -1813,7 +1812,7 @@ function ensure_bfo_on_path()
             candidate_paths = [candidate_paths, { ...
                 bfo_roots{i_root}, ...
                 fullfile(bfo_roots{i_root}, 'src'), ...
-                fullfile(bfo_roots{i_root}, 'matlab')}]; %#ok<AGROW>
+                fullfile(bfo_roots{i_root}, 'matlab')}];
         end
     end
 
@@ -1890,16 +1889,16 @@ function x = lean_evolved_bds_test(fun, x0)
 
 end
 
-function x = accelerated_bds_options_test(fun, x0, use_memory, use_pattern, use_momentum)
+function x = bds_acceleration_test(fun, x0, use_memory, use_pattern, use_momentum)
 
     options.use_productive_direction_memory = use_memory;
     options.use_iteration_pattern_step = use_pattern;
     options.use_momentum_extrapolation = use_momentum;
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
-function x = accelerated_bds_options_profile_test( ...
+function x = bds_acceleration_profile_test( ...
     fun, x0, algorithm, use_memory, use_pattern, use_momentum, ...
     max_eval_factor, step_tolerance)
 
@@ -1909,17 +1908,17 @@ function x = accelerated_bds_options_profile_test( ...
     options.use_momentum_extrapolation = use_momentum;
     options.MaxFunctionEvaluations = max_eval_factor*length(x0);
     options.StepTolerance = step_tolerance;
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
-function x = accelerated_bds_options_budget_limited_test(fun, x0)
+function x = bds_acceleration_budget_limited_test(fun, x0)
 
     options.use_productive_direction_memory = true;
     options.use_iteration_pattern_step = true;
     options.use_momentum_extrapolation = true;
     options.StepTolerance = 1e-12;
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
@@ -1927,7 +1926,7 @@ function x = accelerated_unit_500n_test(fun, x0)
 
     options = accelerated_500n_profile_options(x0);
     options.alpha_init = 1;
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
@@ -1935,7 +1934,7 @@ function x = accelerated_auto_500n_test(fun, x0)
 
     options = accelerated_500n_profile_options(x0);
     options.alpha_init = 'auto';
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
@@ -1952,7 +1951,7 @@ function x = accelerated_auto_combined_stop_500n_test(fun, x0)
     options.lipschitz_constant = 1e3;
     options.use_gradient_reference_consistency = true;
     options.grad_reference_finite_difference_error_tol = 1/30;
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
@@ -2007,7 +2006,7 @@ function x = auto_alpha_init_profile_test( ...
         options.use_iteration_pattern_step = true;
         options.use_momentum_extrapolation = true;
         options.alpha_init = alpha_init;
-        x = accelerated_bds_options(fun, x0, options);
+        x = bds(fun, x0, options);
     else
         options.alpha_init = alpha_init;
         x = bds(fun, x0, options);
@@ -2057,7 +2056,7 @@ function x = accelerated_auto_stopping_profile_test(fun, x0, ...
         use_gradient_reference_consistency;
     options.grad_reference_finite_difference_error_tol = ...
         grad_reference_finite_difference_error_tol;
-    x = accelerated_bds_options(fun, x0, options);
+    x = bds(fun, x0, options);
 
 end
 
@@ -2334,7 +2333,7 @@ function alpha_init = hybrid_alpha_init_for_profile(x0, StepTolerance, relative_
 
 end
 
-function x = bds_tmp_test(fun, x0)
+function x = bds_finite_test(fun, x0)
 
     option.expand = 2;
     option.shrink = 0.5;

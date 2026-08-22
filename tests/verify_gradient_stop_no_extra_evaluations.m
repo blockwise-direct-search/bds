@@ -2,7 +2,10 @@ function verify_gradient_stop_no_extra_evaluations()
 %VERIFY_GRADIENT_STOP_NO_EXTRA_EVALUATIONS checks gradient-stop accounting.
 
 tests_dir = fileparts(mfilename('fullpath'));
-addpath(fullfile(tests_dir, 'competitors'));
+root_dir = fileparts(tests_dir);
+old_path = path();
+cleanup = onCleanup(@() path(old_path));
+addpath(fullfile(root_dir, 'src'));
 x0 = [1.1; 0.9; 1.2];
 options = final_gradient_options(numel(x0));
 defaults_options = rmfield(options, { ...
@@ -28,7 +31,7 @@ fprintf('GRADIENT_STOP_NO_EXTRA_EVALUATIONS_OK\n');
     function [result, calls] = run_with_counter(run_options)
         calls = zeros(numel(x0), 0);
         [result.x, result.f, result.exitflag, result.output] = ...
-            accelerated_bds_options(@counted_objective, x0, run_options);
+            bds(@counted_objective, x0, run_options);
 
         function value = counted_objective(x)
             calls(:, end + 1) = x(:);

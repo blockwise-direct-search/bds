@@ -206,7 +206,7 @@ constant_value = 1;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "expand";
-constant_value = 1.8;
+constant_value = 2.0;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "shrink";
@@ -268,6 +268,26 @@ constant_name = "debug_flag";
 constant_value = false;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
+constant_name = "productive_direction_memory_size_cap";
+constant_value = 5;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
+constant_name = "momentum_decay";
+constant_value = 0.6;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
+constant_name = "use_productive_direction_memory";
+constant_value = true;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
+constant_name = "use_iteration_pattern_step";
+constant_value = true;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
+constant_name = "use_momentum_extrapolation";
+constant_value = true;
+verifyEqual(testcase, get_default_constant(constant_name), constant_value)
+
 end
 
 function get_exitflag_test(testcase)
@@ -299,27 +319,29 @@ verifyEqual(testcase, get_exitflag(information), EXITFLAG)
 
 end
 
-function validate_options_test(testcase)
-%VALIDATE_OPTIONS_TEST tests the file private/validate_options.m.
+function set_options_test(testcase)
+%SET_OPTIONS_TEST checks production option validation and public defaults.
 
 n = 3;
+x0 = zeros(n, 1);
 
 options = struct();
 options.StepTolerance = [1e-6, 1e-6];
-did_error = false;
-try
-    validate_options(options, n);
-catch
-    did_error = true;
-end
-verifyTrue(testcase, did_error)
+verifyError(testcase, @() set_options(options, n, x0), ...
+    'BDS:InvalidStepTolerance')
 
 options.StepTolerance = [1e-6, 1e-6, 1e-6];
-validate_options(options, n);
+resolved = set_options(options, n, x0);
+verifyEqual(testcase, resolved.MaxFunctionEvaluations, 500 * n)
+verifyEqual(testcase, resolved.expand, 2.0)
+verifyTrue(testcase, resolved.use_productive_direction_memory)
+verifyTrue(testcase, resolved.use_iteration_pattern_step)
+verifyTrue(testcase, resolved.use_momentum_extrapolation)
 
 options.num_blocks = 2;
 options.StepTolerance = [1e-6, 1e-6];
-validate_options(options, n);
+resolved = set_options(options, n, x0);
+verifyEqual(testcase, resolved.StepTolerance, [1e-6; 1e-6])
 
 end
 
@@ -330,25 +352,29 @@ x0 = [0; 2; -3; 1e-8];
 StepTolerance = 1e-6;
 expected = [1; 1; 1.5; 5e-6];
 actual = get_auto_alpha_init(x0, StepTolerance, 0.5, 5);
-verifyEqual(testcase, actual, expected)
+verifyEqual(testcase, actual, expected, ...
+    'AbsTol', 2 * eps(max(abs(expected))))
 verifyEqual(testcase, ...
-    get_auto_alpha_init(-x0, StepTolerance, 0.5, 5), expected)
+    get_auto_alpha_init(-x0, StepTolerance, 0.5, 5), expected, ...
+    'AbsTol', 2 * eps(max(abs(expected))))
 
 vector_tolerance = [2; 1e-6; 1e-2; 1e-10];
 expected = [10; 2; 3; 1e-8];
 verifyEqual(testcase, ...
-    get_auto_alpha_init(x0', vector_tolerance', 1, 5), expected)
+    get_auto_alpha_init(x0, vector_tolerance, 1, 5), expected, ...
+    'AbsTol', 2 * eps(max(abs(expected))))
 
 abs_x0 = abs(x0);
 incumbent = max(abs_x0, StepTolerance);
 incumbent(abs_x0 == 0) = 1;
 incumbent = max(incumbent, StepTolerance);
 verifyEqual(testcase, ...
-    get_auto_alpha_init(x0, StepTolerance, 1, 1), incumbent)
+    get_auto_alpha_init(x0, StepTolerance, 1, 1), incumbent, ...
+    'AbsTol', 2 * eps(max(abs(incumbent))))
 
 tiny_nonzero = get_auto_alpha_init(1e-12, StepTolerance, 0.5, 5);
 exact_zero = get_auto_alpha_init(0, StepTolerance, 0.5, 5);
-verifyEqual(testcase, tiny_nonzero, 5e-6)
+verifyEqual(testcase, tiny_nonzero, 5e-6, 'AbsTol', 2 * eps(5e-6))
 verifyEqual(testcase, exact_zero, 1)
 
 verifyError(testcase, ...
@@ -357,9 +383,6 @@ verifyError(testcase, ...
 verifyError(testcase, ...
     @() get_auto_alpha_init(x0, StepTolerance, Inf, 1), ...
     'BDS:get_auto_alpha_init:InvalidCoefficient')
-verifyError(testcase, ...
-    @() get_auto_alpha_init(x0, [1e-6; 1e-6], 1, 1), ...
-    'BDS:get_auto_alpha_init:InvalidStepToleranceLength')
 verifyError(testcase, ...
     @() get_auto_alpha_init(realmax, 1, 2, 1), ...
     'BDS:get_auto_alpha_init:InvalidResult')

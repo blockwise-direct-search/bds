@@ -3,7 +3,7 @@ function [xopt, fopt, exitflag, output] = lean_evolved_bds(fun, x0, termination_
 %
 % This file follows tests/competitors/evolved_bds_solver_lean.py in bds_python
 % and adds optional function-value and estimated-gradient stopping references
-% for focused comparison with accelerated_bds_options. The solver keeps only:
+% for focused comparison with production bds. The solver keeps only:
 %   - ordinary direction cycling within each coordinate block;
 %   - explicit productive displacement memory;
 %   - sweep-level pattern / momentum extrapolation.
@@ -60,7 +60,7 @@ reference_function_value = nan;
 
 x0 = x0(:);
 n = numel(x0);
-maxfun = 200 * n;
+maxfun = 500 * n;
 maxit = maxfun;
 alpha_tol = 1e-6;
 alpha_all = ones(n, 1);

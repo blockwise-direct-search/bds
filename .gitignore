@@ -37,8 +37,11 @@ octave-workspace
 tests/testdata/
 tests/cbds*/
 
-# Tuning results
-tests/misc/tuning/tuning_data/
+# Research results
+research/**/testdata/
+research/tuning/tuning_data/
+research/tuning/solver_1*
+research/tuning/private/tmp
 
 # output.txt
 tests/*.txt
@@ -83,9 +86,6 @@ tests/test_script.m
 tests/optiprofiler
 *.eps
 tests/optiprofiler_script/out
-tests/tuning/tuning_data/
-tests/tuning/solver_1*
-tests/tuning/private/tmp
 tests/out
 tests/competitors/out
 

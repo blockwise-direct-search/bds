@@ -178,8 +178,8 @@ for iter = 1:maxit
             best_slack_coeff, allow_weak);
 
         nf = nf + sub_output.nf;
-        fhist = [fhist, sub_output.fhist]; %#ok<AGROW>
-        xhist = [xhist, sub_output.xhist]; %#ok<AGROW>
+        fhist = [fhist, sub_output.fhist];
+        xhist = [xhist, sub_output.xhist];
         grouped_direction_indices{i} = sub_output.direction_indices;
 
         if sub_output.accepted
@@ -237,7 +237,7 @@ for iter = 1:maxit
                 if paid_now
                     weak_credit_paid_count = weak_credit_paid_count + 1;
                 else
-                    weak_credit_deadlines(end+1) = attempt_count + weak_credit_window; %#ok<AGROW>
+                    weak_credit_deadlines(end+1) = attempt_count + weak_credit_window;
                 end
             end
         end
@@ -253,12 +253,12 @@ for iter = 1:maxit
         else
             [C, Q] = update_reference(C, Q, fbase, eta);
         end
-        C_hist(end+1) = C; %#ok<AGROW>
-        Q_hist(end+1) = Q; %#ok<AGROW>
-        fbase_hist(end+1) = fbase; %#ok<AGROW>
-        fbest_hist(end+1) = fopt; %#ok<AGROW>
-        alpha_min_hist(end+1) = min(alpha_all); %#ok<AGROW>
-        alpha_max_hist(end+1) = max(alpha_all); %#ok<AGROW>
+        C_hist(end+1) = C;
+        Q_hist(end+1) = Q;
+        fbase_hist(end+1) = fbase;
+        fbest_hist(end+1) = fopt;
+        alpha_min_hist(end+1) = min(alpha_all);
+        alpha_max_hist(end+1) = max(alpha_all);
 
         if sub_output.terminate
             terminate = true;
@@ -450,8 +450,8 @@ for j = 1:length(direction_indices)
     xnew = xbase + alpha * D(:, j);
     fnew = fun(xnew);
     nf = nf + 1;
-    fhist = [fhist, fnew]; %#ok<AGROW>
-    xhist = [xhist, xnew]; %#ok<AGROW>
+    fhist = [fhist, fnew];
+    xhist = [xhist, xnew];
 
     strong_success = (fnew + forcing_coeff * alpha^2 < fbase);
     if allow_weak
