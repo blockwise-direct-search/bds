@@ -19,9 +19,10 @@ function alpha_coord = get_auto_alpha_init(x0, StepTolerance, c_x, c_tau)
 %   parameterized rule studied during automatic-step tuning. The production
 %   caller currently uses the frozen choice (c_x, c_tau) = (1, 1).
 %
-%   X0 and STEPTOLERANCE are prevalidated by set_options as
-%   finite real column vectors of the same length, with nonnegative entries
-%   in STEPTOLERANCE.
+%   X0 and STEPTOLERANCE are prevalidated by set_options. X0 is a finite
+%   real column vector. STEPTOLERANCE is either a finite nonnegative scalar,
+%   applying uniformly to all supplied coordinates in one block, or a
+%   finite nonnegative vector with the same size as X0.
 
 validate_coefficient(c_x, 'c_x');
 validate_coefficient(c_tau, 'c_tau');
@@ -29,8 +30,7 @@ validate_coefficient(c_tau, 'c_tau');
 abs_x0 = abs(x0);
 alpha_coord = max(c_x * abs_x0, c_tau * StepTolerance);
 zero_coordinate = (abs_x0 == 0);
-alpha_coord(zero_coordinate) = max( ...
-    1, c_tau * StepTolerance(zero_coordinate));
+alpha_coord(zero_coordinate) = max(1, alpha_coord(zero_coordinate));
 if any(~isfinite(alpha_coord)) || any(alpha_coord <= 0)
     error('BDS:get_auto_alpha_init:InvalidResult', ...
         'The automatic initial steps must be finite and positive.');

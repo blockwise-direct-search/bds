@@ -58,9 +58,14 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               Nonzero coordinates receive
 %                               max(abs(x0(i)), StepTolerance), while exact
 %                               zero coordinates keep the neutral BDS unit
-%                               step. If a block contains several coordinates,
-%                               its initial step size is the maximum coordinate
-%                               step size in that block.
+%                               step. This rule supports every valid block
+%                               partition. If a block contains several
+%                               directions, its shared initial step size is
+%                               the maximum coordinate step suggested by the
+%                               corresponding columns. Thus num_blocks = 1
+%                               uses the maximum over all coordinates, whereas
+%                               num_blocks = n recovers one initial step per
+%                               direction pair.
 %                               This rule is primarily intended for the
 %                               default coordinate direction set; with a
 %                               custom direction_set, the same column/block
@@ -138,6 +143,13 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               different random sequences across runs.
 %
 %   The following options are related to the acceleration steps.
+%   All three acceleration mechanisms operate on complete n-dimensional
+%   displacements produced by successful polling updates. They therefore
+%   support every valid block partition: changing num_blocks changes how the
+%   polling steps are formed, but does not change the representation used by
+%   the acceleration phases. In particular, num_blocks = 1 supplies the one
+%   block's successful displacement, while num_blocks = n may accumulate
+%   successful displacements from multiple one-direction blocks.
 %   use_productive_direction_memory   Whether to try productive search directions retained from
 %                                     previous iterations before the regular block-polling phase.
 %                                     The memory is an ordered list that is retained across

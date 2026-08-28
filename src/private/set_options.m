@@ -186,7 +186,9 @@ end
 % Set the initial step sizes.
 options = set_default_if_missing(options, 'alpha_init', ...
     get_default_constant("alpha_init"));
-options.alpha_init = normalize_alpha_init(options.alpha_init, options.num_blocks, n, x0, options.StepTolerance);
+options.alpha_init = normalize_alpha_init( ...
+    options.alpha_init, options.num_blocks, n, x0, ...
+    options.StepTolerance, options);
 
 % Set the expanding and shrinking factors.
 options = set_default_if_missing(options, 'is_noisy', ...
@@ -406,17 +408,28 @@ if num_used_indices ~= n || ~all(used_dimension_mask)
 end
 end
 
-function alpha_init = normalize_alpha_init(alpha_init, num_blocks, n, x0, StepTolerance)
+function alpha_init = normalize_alpha_init( ...
+        alpha_init, num_blocks, n, x0, StepTolerance, options)
 if ischarstr(alpha_init) && strcmpi(alpha_init, 'auto')
-    if num_blocks ~= n
-        error('BDS:InvalidAlphaInit', ...
-            'options.alpha_init = "auto" is supported only when options.num_blocks equals n.');
-    end
     if any(~isfinite(x0))
         error('BDS:InvalidX0', ...
             'x0 must contain only finite values when options.alpha_init = "auto".');
     end
-    alpha_init = get_auto_alpha_init(x0, StepTolerance, 1, 1);
+
+    % A block has only one polling step even when it contains several
+    % directions. Compute the scale suggested by x0 for every direction in
+    % the block, then use the largest suggestion so that the shared step is
+    % not below the initial scale of any constituent direction. The
+    % direction-pair indices returned by divide_direction_set are converted
+    % back to their direction_set column indices before indexing x0.
+    grouped_direction_indices = divide_direction_set(n, num_blocks, options);
+    alpha_init = zeros(num_blocks, 1);
+    for i = 1:num_blocks
+        coordinate_indices = unique( ...
+            ceil(grouped_direction_indices{i}(:) / 2));
+        alpha_init(i) = max(get_auto_alpha_init( ...
+            x0(coordinate_indices), StepTolerance(i), 1, 1));
+    end
     return;
 end
 if ~(isnumeric(alpha_init) && isreal(alpha_init) ...
