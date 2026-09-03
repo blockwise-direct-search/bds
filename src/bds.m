@@ -39,37 +39,33 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %   direction_set               A matrix whose columns will be used to define the polling directions.
 %                               If options does not contain direction_set, then the polling
 %                               directions will be {e_1, -e_1, ..., e_n, -e_n}.
-%                               Otherwise, it should be a nonsingular n-by-n matrix. Then the
+%                               Otherwise, it should be an n-by-n matrix. The intended
 %                               polling directions will be {d_1, -d_1, ..., d_n, -d_n}, where d_i is
-%                               the i-th column of direction_set. If direction_set is not singular,
-%                               then we will revise the direction_set to make it linear independent.
+%                               the i-th column of direction_set. Invalid, negligible, parallel, or
+%                               linearly dependent columns are repaired or replaced to produce a
+%                               basis while preserving surviving columns in their original positions.
 %                               See get_direction_set.m for details.
 %                               Default: eye(n).
 %   alpha_init                  Initial step size. If alpha_init is a positive scalar, then the
 %                               initial step size of each block is set to alpha_init. If alpha_init
 %                               is a vector, then the initial step size of the i-th block is
 %                               set to alpha_init(i). If alpha_init is "auto",
-%                               then the initial polling steps are chosen by
-%                               a fminsearch-inspired scale-aware rule:
-%                               MATLAB's fminsearch constructs its initial
-%                               simplex using coordinate-dependent
-%                               perturbations of x0; analogously, BDS uses
-%                               the coordinate scales of the starting point.
-%                               Nonzero coordinates receive
-%                               max(abs(x0(i)), StepTolerance), while exact
-%                               zero coordinates keep the neutral BDS unit
-%                               step. This rule supports every valid block
-%                               partition. If a block contains several
-%                               directions, its shared initial step size is
-%                               the maximum coordinate step suggested by the
-%                               corresponding columns. Thus num_blocks = 1
-%                               uses the maximum over all coordinates, whereas
-%                               num_blocks = n recovers one initial step per
-%                               direction pair.
-%                               This rule is primarily intended for the
-%                               default coordinate direction set; with a
-%                               custom direction_set, the same column/block
-%                               indices are used.
+%                               then the initial polling steps are chosen by a
+%                               fminsearch-inspired scale-aware rule. For block b, let tau_b be its
+%                               StepTolerance. The coordinate scale radius s_i is
+%                               max(abs(x0(i)), tau_b) when x0(i) is nonzero and
+%                               max(1, tau_b) when x0(i) is exactly zero. Thus the starting point
+%                               defines the axis-aligned scale ellipsoid
+%                               {z : norm(diag(1./s)*z) <= 1} in the original coordinates.
+%                               For every final positive polling direction d_j in block b, including
+%                               any direction repaired by get_direction_set, its coefficient scale is
+%                               1/norm(diag(1./s)*d_j). The block uses the maximum of these scales and
+%                               tau_b because all directions in one block share a single step size.
+%                               For the coordinate basis, this exactly recovers the coordinate-wise
+%                               rule when num_blocks = n and the existing blockwise-maximum rule for
+%                               any other valid block partition. For a general basis, it transfers the
+%                               coordinate-axis scales of x0 to the actual polling directions without
+%                               treating the coordinates of D^(-1)*x0 as physical scale radii.
 %                               Default: 1.
 %   forcing_function            The forcing function used for deciding whether the step achieves a
 %                               sufficient decrease. forcing_function should be a function handle.
@@ -554,8 +550,25 @@ grouped_direction_indices = divide_direction_set(n, num_blocks, options);
 
 block_visiting_pattern = options.block_visiting_pattern;
 
-% Initial step sizes for all blocks.
-alpha_all = options.alpha_init;
+% Resolve automatic initial steps only after get_direction_set has produced the final basis and the
+% directions have been assigned to blocks. For block i, get_auto_alpha_init supplies the coordinate
+% radii of the scale ellipsoid associated with alpha_tol(i). Dividing each final positive direction
+% by these radii and taking the reciprocal Euclidean norm gives the coefficient that reaches the
+% ellipsoid boundary along that direction. A block has one shared step, so it takes the largest
+% direction coefficient. The explicit alpha_tol(i) floor matters when a custom basis contains a
+% direction whose norm is greater than one.
+if ischarstr(options.alpha_init) && strcmpi(options.alpha_init, 'auto')
+    alpha_all = zeros(num_blocks, 1);
+    for i = 1:num_blocks
+        positive_direction_indices = ...
+            (grouped_direction_indices{i}(1:2:end) + 1) / 2;
+        alpha_all(i) = max([alpha_tol(i), 1 ./ vecnorm( ...
+            positive_direction_set(:, positive_direction_indices) ./ ...
+            get_auto_alpha_init(x0, alpha_tol(i), 1, 1), 2, 1)]);
+    end
+else
+    alpha_all = options.alpha_init;
+end
 
 expand = options.expand;
 shrink = options.shrink;

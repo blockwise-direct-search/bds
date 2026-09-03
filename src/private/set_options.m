@@ -16,8 +16,9 @@ function options = set_options(options, n, x0)
 %   n                                  Problem dimension derived from the column form of x0. It
 %                                      sets dimension-dependent defaults and option bounds.
 %   x0                                 Initial n-by-1 point prepared by bds.
-%                                      It is used when alpha_init is "auto"; that mode also
-%                                      requires finite components.
+%                                      Its components must be finite when alpha_init is "auto".
+%                                      The automatic steps are resolved in bds only after the
+%                                      final polling basis and block partition are available.
 %   grad_reference_raw_tol             Internal output field derived from the validated
 %                                      grad_reference_finite_difference_error_tol and shrink.
 
@@ -187,8 +188,7 @@ end
 options = set_default_if_missing(options, 'alpha_init', ...
     get_default_constant("alpha_init"));
 options.alpha_init = normalize_alpha_init( ...
-    options.alpha_init, options.num_blocks, n, x0, ...
-    options.StepTolerance, options);
+    options.alpha_init, options.num_blocks, x0);
 
 % Set the expanding and shrinking factors.
 options = set_default_if_missing(options, 'is_noisy', ...
@@ -408,27 +408,11 @@ if num_used_indices ~= n || ~all(used_dimension_mask)
 end
 end
 
-function alpha_init = normalize_alpha_init( ...
-        alpha_init, num_blocks, n, x0, StepTolerance, options)
+function alpha_init = normalize_alpha_init(alpha_init, num_blocks, x0)
 if ischarstr(alpha_init) && strcmpi(alpha_init, 'auto')
     if any(~isfinite(x0))
         error('BDS:InvalidX0', ...
             'x0 must contain only finite values when options.alpha_init = "auto".');
-    end
-
-    % A block has only one polling step even when it contains several
-    % directions. Compute the scale suggested by x0 for every direction in
-    % the block, then use the largest suggestion so that the shared step is
-    % not below the initial scale of any constituent direction. The
-    % direction-pair indices returned by divide_direction_set are converted
-    % back to their direction_set column indices before indexing x0.
-    grouped_direction_indices = divide_direction_set(n, num_blocks, options);
-    alpha_init = zeros(num_blocks, 1);
-    for i = 1:num_blocks
-        coordinate_indices = unique( ...
-            ceil(grouped_direction_indices{i}(:) / 2));
-        alpha_init(i) = max(get_auto_alpha_init( ...
-            x0(coordinate_indices), StepTolerance(i), 1, 1));
     end
     return;
 end
