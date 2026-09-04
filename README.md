@@ -10,9 +10,20 @@ See [Haitian LI's poster](https://lht97.github.io/documents/poster.pdf) on BDS f
 
 ## How to install BDS?
 
-1. Clone this repository. You should then get a folder named `bds` containing
-   this README file and `setup.m`.
-2. In MATLAB, change the current directory to that folder and run:
+1. Clone a lightweight solver-only working tree:
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse --single-branch \
+  --branch main https://github.com/blockwise-direct-search/bds.git
+cd bds
+git sparse-checkout set src examples
+```
+
+This checks out the files needed to use BDS, including `README.md`, `LICENSE`,
+`setup.m`, `src/`, and `examples/`, without checking out the research,
+documentation, test, or workflow directories.
+
+2. In MATLAB, change the current directory to the cloned `bds` folder and run:
 
 ```matlab
 setup
