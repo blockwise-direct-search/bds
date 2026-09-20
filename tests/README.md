@@ -20,3 +20,12 @@ The remaining top-level drivers cover stress, recursion, parallel execution,
 compatibility, and profiling. `competitors/` holds independent regression
 oracles and maintained comparison wrappers; `private/` holds test-only helpers;
 `tools/` contains small maintained result-processing utilities.
+
+The suite also runs three verifiers for the ten-solver full-set benchmark
+(TSFSB) infrastructure in `research/ten_solver_full_set_benchmark/`:
+`verify_lam_paper_exact` checks the paper-exact LAM port in
+`competitors/lam_paper_exact.m`, `verify_tsfsb_workflow_contracts` checks the
+frozen benchmark specification and runner contracts (no external solver
+required), and `verify_tsfsb_solver_configurations` checks the fixed solver
+option structs and runs smoke executions, skipping external solvers that are
+not installed.
