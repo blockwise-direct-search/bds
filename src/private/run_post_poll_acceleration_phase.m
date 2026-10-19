@@ -8,11 +8,11 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %   ACCELERATION_CONFIGURATION, ITERATION_STEP) performs up to two ordered
 %   directional searches after regular polling:
 %
-%   1. The iteration-pattern search probes along the normalized net
-%      displacement produced during the current improving iteration.
-%   2. The momentum-direction extrapolation is a fallback. It probes along
-%      the updated momentum direction only when the pattern search is disabled
-%      or produces no improvement.
+%   1. The momentum-direction extrapolation probes along the updated momentum
+%      direction, which combines normalized displacements across iterations.
+%   2. The iteration-pattern search is a fallback along the normalized net
+%      displacement of the current improving iteration. It is tried only when
+%      momentum is disabled, unavailable, or accepts no improving point.
 %
 %   fun                                Objective function.
 %
@@ -38,7 +38,7 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %                                      memory.
 %   momentum                           Current n-by-1 momentum vector. When momentum
 %                                      extrapolation is enabled, it is updated before any
-%                                      pattern candidate is evaluated and remains updated
+%                                      acceleration candidate is evaluated and remains updated
 %                                      regardless of the later search outcome.
 %
 %   ACCELERATION_CONFIGURATION is a read-only structure containing the options
@@ -72,11 +72,11 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %
 %   Both searches generate candidates from the entry xbase using the same
 %   pattern_step and the same factors [1, 2, 4]; only the search direction
-%   differs. Each search stops at its first non-improving candidate. Momentum
-%   candidates are tried only if the pattern search did not improve, the
-%   target was not reached, a usable momentum direction exists, and budget
-%   remains. A momentum point identical to the failed pattern point is not
-%   reevaluated.
+%   differs. Each search stops at its first non-improving candidate. Pattern
+%   candidates are tried only if momentum accepted no point, the target was
+%   not reached, and budget remains. In particular, accepting a momentum point
+%   and then rejecting a farther point does not trigger pattern fallback.
+%   A pattern point identical to the rejected momentum point is not reevaluated.
 
 acceleration_succeeded = false;
 target_reached = false;
@@ -86,7 +86,7 @@ pattern_direction = iteration_step / iteration_step_norm;
 pattern_step = max(iteration_step_norm, acceleration_configuration.step_floor);
 
 % Prepare the momentum direction before either directional search. The updated
-% momentum remains part of the solver state even if the pattern search succeeds.
+% momentum remains part of the solver state even if neither search succeeds.
 if acceleration_configuration.use_momentum_extrapolation
     post_poll_acceleration_state.momentum = ...
         acceleration_configuration.momentum_decay ...
@@ -107,50 +107,11 @@ factors = [1.0, 2.0, 4.0];
 xbest = post_poll_acceleration_state.xbase;
 fbest = post_poll_acceleration_state.fbase;
 best_direction = [];
-pattern_improved = false;
-failed_pattern_point = [];
+momentum_improved = false;
+failed_momentum_point = [];
 
-% Part 1: search along the current iteration-pattern direction.
-if acceleration_configuration.use_iteration_pattern_step
-    for i = 1:numel(factors)
-        if post_poll_acceleration_state.nf ...
-                >= acceleration_configuration.MaxFunctionEvaluations
-            break;
-        end
-        xnew = post_poll_acceleration_state.xbase ...
-            + factors(i) * pattern_step * pattern_direction;
-        [fnew, fnew_real, is_valid] = eval_fun(fun, xnew);
-        post_poll_acceleration_state.nf = post_poll_acceleration_state.nf + 1;
-        post_poll_acceleration_state.fhist(post_poll_acceleration_state.nf) = fnew_real;
-        if acceleration_configuration.output_xhist
-            post_poll_acceleration_state.xhist(:, post_poll_acceleration_state.nf) = xnew;
-            if ~is_valid
-                post_poll_acceleration_state.invalid_points = [ ...
-                    post_poll_acceleration_state.invalid_points, xnew];
-            end
-        end
-        if fnew < fbest
-            xbest = xnew;
-            fbest = fnew;
-            best_direction = pattern_direction;
-            pattern_improved = true;
-        else
-            failed_pattern_point = xnew;
-            break;
-        end
-        if fnew <= acceleration_configuration.ftarget
-            target_reached = true;
-            break;
-        end
-    end
-end
-
-% Part 2: when the pattern search is disabled or does not improve, reuse the
-% same factors and pattern_step along the updated momentum direction.
-if ~target_reached && acceleration_configuration.use_momentum_extrapolation ...
-        && ~pattern_improved && ~isempty(momentum_direction) ...
-        && post_poll_acceleration_state.nf ...
-            < acceleration_configuration.MaxFunctionEvaluations
+% Part 1: extrapolate along the updated momentum direction, when available.
+if acceleration_configuration.use_momentum_extrapolation && ~isempty(momentum_direction)
     for i = 1:numel(factors)
         if post_poll_acceleration_state.nf ...
                 >= acceleration_configuration.MaxFunctionEvaluations
@@ -158,9 +119,6 @@ if ~target_reached && acceleration_configuration.use_momentum_extrapolation ...
         end
         xnew = post_poll_acceleration_state.xbase ...
             + factors(i) * pattern_step * momentum_direction;
-        if ~isempty(failed_pattern_point) && isequal(xnew, failed_pattern_point)
-            break;
-        end
         [fnew, fnew_real, is_valid] = eval_fun(fun, xnew);
         post_poll_acceleration_state.nf = post_poll_acceleration_state.nf + 1;
         post_poll_acceleration_state.fhist(post_poll_acceleration_state.nf) = fnew_real;
@@ -175,6 +133,49 @@ if ~target_reached && acceleration_configuration.use_momentum_extrapolation ...
             xbest = xnew;
             fbest = fnew;
             best_direction = momentum_direction;
+            momentum_improved = true;
+        else
+            failed_momentum_point = xnew;
+            break;
+        end
+        if fnew <= acceleration_configuration.ftarget
+            target_reached = true;
+            break;
+        end
+    end
+end
+
+% Part 2: only when momentum accepted no point, reuse the same factors and
+% pattern_step along the current iteration-pattern direction. A later rejection
+% after a momentum improvement does not enable this fallback.
+if ~target_reached && acceleration_configuration.use_iteration_pattern_step ...
+        && ~momentum_improved ...
+        && post_poll_acceleration_state.nf ...
+            < acceleration_configuration.MaxFunctionEvaluations
+    for i = 1:numel(factors)
+        if post_poll_acceleration_state.nf ...
+                >= acceleration_configuration.MaxFunctionEvaluations
+            break;
+        end
+        xnew = post_poll_acceleration_state.xbase ...
+            + factors(i) * pattern_step * pattern_direction;
+        if ~isempty(failed_momentum_point) && isequal(xnew, failed_momentum_point)
+            break;
+        end
+        [fnew, fnew_real, is_valid] = eval_fun(fun, xnew);
+        post_poll_acceleration_state.nf = post_poll_acceleration_state.nf + 1;
+        post_poll_acceleration_state.fhist(post_poll_acceleration_state.nf) = fnew_real;
+        if acceleration_configuration.output_xhist
+            post_poll_acceleration_state.xhist(:, post_poll_acceleration_state.nf) = xnew;
+            if ~is_valid
+                post_poll_acceleration_state.invalid_points = [ ...
+                    post_poll_acceleration_state.invalid_points, xnew];
+            end
+        end
+        if fnew < fbest
+            xbest = xnew;
+            fbest = fnew;
+            best_direction = pattern_direction;
         else
             break;
         end

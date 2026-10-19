@@ -1,13 +1,10 @@
 function verify_bds_acceleration()
 %VERIFY_BDS_ACCELERATION Strict checks for the production BDS accelerations.
 %
-% This verification has two acceptance targets:
-%
-%   1. With all acceleration switches off, bds.m must match the frozen
-%      pre-acceleration BDS reference for the same Algorithm and explicit
-%      options.
-%   2. With all acceleration switches on and the default/CBDS base algorithm,
-%      bds.m must match the independent lean_evolved_bds.m reference.
+% All five non-accelerated algorithms retain their frozen-reference checks.
+% The former lean/PM all-on comparison is preserved as a historical test in
+% tests/archive/legacy_pm/verify_bds_acceleration_pm.m. It is not an MP oracle.
+% Run verify_bds_mp_reference separately with the frozen MP on the path.
 
 path_tests = fileparts(mfilename('fullpath'));
 path_root = fileparts(path_tests);
@@ -22,13 +19,11 @@ cd(path_tests);
 fprintf('\nRunning production BDS acceleration verification...\n');
 
 verify_acceleration_off_matches_reference(oldfolder);
-verify_acceleration_on_matches_lean(oldfolder, false);
-verify_acceleration_on_matches_lean(oldfolder, true);
 
 fprintf('\nProduction BDS acceleration verification passed.\n');
 fprintf(['  off: bds.m == bds_without_acceleration_reference.m for ', ...
     'Algorithm=cbds/pbds/rbds/pads/ds, with matching explicit options.\n']);
-fprintf('  on : bds.m == lean_evolved_bds.m for default and Algorithm=cbds.\n');
+fprintf('  MP-on: separate frozen-reference verification is required.\n');
 
 end
 
@@ -47,28 +42,6 @@ for algorithm = algorithms
         {@run_frozen_bds_reference, @run_production_bds_no_acceleration}, ...
         dims, ir_values, seed_values, options);
 end
-
-end
-
-function verify_acceleration_on_matches_lean(oldfolder, use_algorithm_cbds)
-
-dims = 1:10;
-ir_values = 0:20;
-seed_values = [12345, 23456, 34567];
-options = base_iseqiv_options(oldfolder);
-
-if use_algorithm_cbds
-    label = 'acceleration-on-Algorithm-cbds-vs-lean';
-    production_solver = @(fun, x0, solver_options) ...
-        run_production_bds_lean(fun, x0, solver_options, true);
-else
-    label = 'acceleration-on-default-vs-lean';
-    production_solver = @(fun, x0, solver_options) ...
-        run_production_bds_lean(fun, x0, solver_options, false);
-end
-
-run_iseqiv_suite(label, {@run_lean_reference, production_solver}, ...
-    dims, ir_values, seed_values, options);
 
 end
 
@@ -110,6 +83,7 @@ function options = base_iseqiv_options(oldfolder)
 options = struct();
 options.olddir = oldfolder;
 options.sequential = false;
+options.noninteractive = true;
 
 end
 
@@ -138,55 +112,6 @@ if ~isfield(options, 'expand')
 end
 
 [xopt, fopt, exitflag, output] = bds(fun, x0, options);
-
-end
-
-function [xopt, fopt, exitflag, output] = run_lean_reference(fun, x0, ~)
-
-[xopt, fopt, exitflag, output] = lean_evolved_bds(@safe_fun, x0);
-output = lean_algorithmic_output(output);
-
-    function f = safe_fun(x)
-        f = algorithmic_eval(fun, x);
-    end
-
-end
-
-function [xopt, fopt, exitflag, output] = run_production_bds_lean( ...
-        fun, x0, ~, use_algorithm_cbds)
-
-production_options = struct();
-if use_algorithm_cbds
-    production_options.Algorithm = 'cbds';
-end
-production_options.use_productive_direction_memory = true;
-production_options.use_iteration_pattern_step = true;
-production_options.use_momentum_extrapolation = true;
-
-% Keep the row-input/tough behavior used by the fixed reference comparison:
-% force the solver's internal input to a column without wrapping the objective.
-x0 = double(x0(:));
-[xopt, fopt, exitflag, output] = bds(fun, x0, production_options);
-output = lean_algorithmic_output(output);
-
-end
-
-function output = lean_algorithmic_output(raw_output)
-
-output.funcCount = raw_output.funcCount;
-
-end
-
-function f = algorithmic_eval(fun, x)
-
-try
-    f = fun(x);
-catch
-    f = nan;
-end
-if isnan(f)
-    f = inf;
-end
 
 end
 

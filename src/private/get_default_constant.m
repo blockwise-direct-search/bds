@@ -81,7 +81,7 @@ switch constant_name
     case "momentum_decay"
         constant_value = 0.6;
     case "use_productive_direction_memory"
-        constant_value = true;
+        constant_value = false;
     case "use_iteration_pattern_step"
         constant_value = true;
     case "use_momentum_extrapolation"

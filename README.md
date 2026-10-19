@@ -44,18 +44,18 @@ and robust handling of invalid function evaluations.
 
 ### Acceleration
 
-The public `bds` solver includes three acceleration mechanisms, all enabled by
-default:
+The public `bds` solver enables the paper's two post-poll acceleration mechanisms
+by default, in momentum → pattern order:
 
-- **Productive-direction memory** tries a small ordered collection of previously
-  successful directions before regular block polling.
-- **Iteration-pattern search** extrapolates along the net successful displacement
-  of the current iteration after regular polling.
 - **Momentum extrapolation** combines successful iteration displacements across
   iterations and searches along the resulting momentum direction.
+- **Iteration-pattern search** extrapolates along the net successful displacement
+  of the current iteration if momentum is disabled, unavailable, or accepts no
+  improving point.
 
 The two post-poll mechanisms use the same candidate step factors `1`, `2`, and
-`4`; pattern candidates are considered before momentum candidates. The default
+`4` from the same entry base point. Once momentum accepts any point, a later
+rejection does not trigger pattern fallback. The default
 function-evaluation budget is `500*length(x0)`, and the default noiseless
 expansion factor is `2.0`.
 
@@ -64,6 +64,18 @@ The default accelerated solver can be called directly:
 ```matlab
 [xopt, fopt] = bds(fun, x0);
 ```
+
+**Advanced option:** productive-direction memory tries previously successful
+directions before regular polling. It remains available, but is now **disabled
+by default** (previous versions enabled it and used pattern → momentum).
+Enable it explicitly with `options.use_productive_direction_memory = true`.
+The two post-poll switches remain enabled by default; there is no public order
+selector. Changing the default does not change any frozen experimental result.
+
+For explicit internal/external paper settings, use
+[`bds_paper_options`](examples/bds_paper_options.m); see
+[paper reproduction settings](docs/PAPER_REPRODUCTION.md). A default solver call
+is not a recipe for reproducing all paper experiments.
 
 Each mechanism can be controlled independently. To recover the non-accelerated
 polling behavior under otherwise identical explicit options, disable all three:

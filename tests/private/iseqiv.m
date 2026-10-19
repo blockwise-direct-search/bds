@@ -147,6 +147,20 @@ rng(orig_rng_state);
 equiv = iseq(x1(:), fx1, exitflag1, output1, x2(:), fx2, exitflag2, output2, prec);
 
 if ~equiv
+    % Batch verification must preserve the failure and exit rather than enter
+    % an interactive debugger. Existing callers retain their interactive mode.
+    if isfield(options, 'noninteractive') && options.noninteractive
+        if isfield(options, 'failure_directory')
+            failure_directory = options.failure_directory;
+        else
+            failure_directory = tempdir;
+        end
+        failure_file = [tempname(failure_directory), '.mat'];
+        save(failure_file, 'p', 'ir', 'rseed', 'test_options', 'options', ...
+            'x1', 'fx1', 'exitflag1', 'output1', 'x2', 'fx2', 'exitflag2', 'output2');
+        error('iseqiv:NoninteractiveMismatch', ...
+            'Solvers differ on %s, ir=%d. Evidence: %s', pname, ir, failure_file);
+    end
     keyboard
     format long;
     fprintf('\nnf: nf1 = %d, nf2 = %d', output1.funcCount, output2.funcCount)

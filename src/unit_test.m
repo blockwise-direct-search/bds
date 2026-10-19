@@ -277,7 +277,7 @@ constant_value = 0.6;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "use_productive_direction_memory";
-constant_value = true;
+constant_value = false;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "use_iteration_pattern_step";
@@ -334,7 +334,7 @@ options.StepTolerance = [1e-6, 1e-6, 1e-6];
 resolved = set_options(options, n, x0);
 verifyEqual(testcase, resolved.MaxFunctionEvaluations, 500 * n)
 verifyEqual(testcase, resolved.expand, 2.0)
-verifyTrue(testcase, resolved.use_productive_direction_memory)
+verifyFalse(testcase, resolved.use_productive_direction_memory)
 verifyTrue(testcase, resolved.use_iteration_pattern_step)
 verifyTrue(testcase, resolved.use_momentum_extrapolation)
 

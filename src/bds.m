@@ -12,12 +12,11 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %   XOPT = BDS(FUN, X0, OPTIONS) performs the
 %   optimization using the specified options in OPTIONS.
 %
-%   By default, BDS enables three acceleration mechanisms around regular
-%   block polling: productive-direction memory before polling, followed by
-%   iteration-pattern search and momentum-direction extrapolation after
-%   polling. The two post-poll searches use the same candidate step factors
-%   1, 2, and 4, with pattern candidates considered first. Each mechanism can
-%   be disabled independently by the options documented below.
+%   By default, BDS tries momentum-direction extrapolation after regular block
+%   polling, followed by iteration-pattern search only if momentum accepts no
+%   improving point. Both searches use the same candidate step factors 1, 2,
+%   and 4. Productive-direction memory before polling is available but disabled
+%   by default. Each mechanism can be controlled independently below.
 %
 %   OPTIONS should be a structure containing various fields that configure the algorithm's behavior.
 %   The most important options correspond directly to the parameters in Algorithm 2 of
@@ -176,7 +175,7 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                     In summary, enabling this option adds an opportunistic
 %                                     search over retained productive directions before the
 %                                     regular BDS block-polling phase.
-%                                     Default: true.
+%                                     Default: false.
 %   productive_direction_memory_size  Maximum number of entries retained in the ordered
 %                                     productive-direction memory. This option limits the number
 %                                     of stored entries, each consisting of a direction and its
@@ -190,6 +189,10 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                     beginning to the end of the iteration is greater than the
 %                                     largest component of StepTolerance, and function evaluations
 %                                     remain available.
+%                                     If momentum extrapolation is also enabled, the pattern search
+%                                     is attempted only if momentum is unavailable or has accepted
+%                                     no improving point. A later rejection after an accepted
+%                                     momentum point does not trigger a pattern search.
 %                                     The pattern direction is the normalized net displacement of
 %                                     the base point during the current iteration. The pattern step
 %                                     length is the larger of the norm of this displacement and
@@ -228,30 +231,25 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                     largest component of StepTolerance, it is normalized to form
 %                                     the momentum direction. Otherwise, no momentum direction is
 %                                     available for the current iteration.
-%                                     When use_iteration_pattern_step is enabled, pattern candidates
-%                                     are evaluated first. Candidates along the momentum direction
-%                                     are evaluated only if the pattern search produces no
-%                                     improvement, the target value has not been reached, a momentum
-%                                     direction is available, and function evaluations remain
-%                                     available. When use_iteration_pattern_step is disabled, the
-%                                     momentum search is attempted directly whenever a momentum
-%                                     direction is available and the same iteration conditions hold.
+%                                     Momentum candidates are evaluated first whenever a momentum
+%                                     direction is available. If this search accepts no improving
+%                                     point, use_iteration_pattern_step enables a pattern fallback
+%                                     while the target has not been reached and budget remains.
 %                                     In either case, candidate points use the pattern step length
 %                                     multiplied by the factors 1, 2, and 4. The search stops at the
 %                                     first candidate whose objective value is not lower than the
 %                                     current best value, when the objective value is less than or
 %                                     equal to ftarget, or when the function evaluation budget is
-%                                     exhausted. If a momentum candidate is exactly the same point
-%                                     as a pattern candidate that has already been evaluated and
-%                                     rejected, it is skipped so that the objective function is not
+%                                     exhausted. If a fallback pattern candidate is exactly the same
+%                                     point as the rejected momentum candidate, that search stops
+%                                     so that the objective function is not
 %                                     evaluated twice. If the momentum search improves the objective
 %                                     function, the best candidate becomes the new base point and
 %                                     its direction may be stored in the productive direction
 %                                     memory.
 %                                     In summary, this option updates a direction averaged over
 %                                     successful iteration displacements and may use that direction
-%                                     for an additional search after an unsuccessful pattern search
-%                                     or when the pattern search is disabled.
+%                                     for the first additional search after regular polling.
 %                                     Default: true.
 %   momentum_decay                    Weight assigned to the previous momentum vector in the
 %                                     momentum update
@@ -990,7 +988,7 @@ for iter = 1:maxit
     % current iteration for the post-poll acceleration phase.
     iteration_step = xbase - xbase_iteration_start;
 
-    % Post-poll acceleration phase: try a pattern step, then momentum if needed.
+    % Post-poll acceleration phase: try momentum, then a pattern step if needed.
     % The entry guard stays here to keep the phase ordering visible;
     % post_poll_acceleration_state packs exactly the mutable state the phase
     % may update.
