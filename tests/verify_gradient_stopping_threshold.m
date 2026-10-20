@@ -103,7 +103,6 @@ fprintf('GRADIENT_STOPPING_THRESHOLD_OK\n');
     function [result, calls] = run_production_case( ...
             reference_norm, later_norms, window_size, maxfun, grad_tol, acceleration_on)
         options = stopping_options(window_size, maxfun, grad_tol);
-        options.use_productive_direction_memory = acceleration_on;
         options.use_iteration_pattern_step = acceleration_on;
         options.use_momentum_extrapolation = acceleration_on;
         [result, calls] = run_solver( ...

@@ -8,7 +8,7 @@ for stage in "$@"; do
         smoke) limit=1800 ;;
         deliberate_failure) limit=120 ;;
         strict) limit=21600 ;;
-        manifest) limit=43200 ;;
+        manifest|manifest_internal|manifest_external) limit=43200 ;;
         regression) limit=21600 ;;
         *) exit 2 ;;
     esac

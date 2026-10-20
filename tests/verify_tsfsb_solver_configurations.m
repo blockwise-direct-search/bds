@@ -73,6 +73,9 @@ for n = [2, 7]
 
         options.MaxFunctionEvaluations = 12;
         options.output_alpha_hist = true;
+        % Audit the historical TSFSB options above unchanged. Execute the
+        % current MP counterpart below; retained=true is no longer supported.
+        options = rmfield(options, 'use_productive_direction_memory');
         [~, ~, ~, output] = bds(@focused_objective, x0, options);
         assert(isequal(output.alpha_hist(:, 1), expected_steps(:)), ...
             'Unexpected production initial steps for %s at n=%d.', ...
@@ -147,12 +150,19 @@ objective = @(x) sum((x - linspace(-0.5, 0.5, numel(x))').^2) ...
 % In-repository solvers must always run.
 for configuration = {'bds', 'bds-without-acceleration', 'ds'}
     options = tsfsb_benchmark_options(x0, configuration{1});
+    if options.use_productive_direction_memory
+        assert_throws(@() bds(objective, x0, options), ...
+            'BDS:RemovedProductiveDirectionMemory');
+    end
+    % Execute the current counterpart, not a reproduction of historical TSFSB.
+    options = rmfield(options, 'use_productive_direction_memory');
     [x, ~, exitflag, output] = bds(objective, x0, options);
     assert(output.funcCount <= budget);
     assert(isnumeric(exitflag) && isscalar(exitflag));
     assert(all(isfinite(x)));
 end
 
+fprintf('VERIFY_TSFSB_CURRENT_MP_ADAPTATION_OK\n');
 pds_options = tsfsb_external_solver_options(x0, 'pds');
 pds_options.seed = tsfsb_pds_seed(x0);
 [x, ~, exitflag, output] = pds(objective, x0, pds_options);

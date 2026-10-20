@@ -70,9 +70,10 @@ end
     end
 
     function [x, f, flag, output] = reference_solver(fun, x0, generated_options)
-        second_record = record_bds_execution(@c03_bds_mp, fun, x0, effective_options, random_state);
+        reference_options = frozen_mp_options(effective_options, numel(x0));
+        second_record = record_bds_execution(@c03_bds_mp, fun, x0, reference_options, random_state);
         save(evidence_file, 'effective_options', 'generated_options', 'effective_x0', ...
-            'random_state', 'first_record', 'second_record');
+            'reference_options', 'random_state', 'first_record', 'second_record');
         assert(isequaln(first_record, second_record), ...
             'verify_bds_mp_reference:FullTraceMismatch', 'Full trace differs: %s', evidence_file);
         x = second_record.xopt; f = second_record.fopt;

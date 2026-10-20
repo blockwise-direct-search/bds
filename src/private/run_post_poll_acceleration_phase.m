@@ -33,9 +33,6 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %   invalid_points                     Matrix whose columns are evaluated points with
 %                                      invalid objective values. It is updated only when
 %                                      output_xhist is true.
-%   productive_direction_memory        Ordered structure array with fields direction and
-%                                      step. An accepted direction may be admitted to this
-%                                      memory.
 %   momentum                           Current n-by-1 momentum vector. When momentum
 %                                      extrapolation is enabled, it is updated before any
 %                                      acceleration candidate is evaluated and remains updated
@@ -44,15 +41,12 @@ function [post_poll_acceleration_state, acceleration_succeeded, target_reached] 
 %   ACCELERATION_CONFIGURATION is a read-only structure containing the options
 %   needed by the two post-poll acceleration searches. Its fields control
 %   which searches are enabled, the momentum update, their common evaluation
-%   constraints and history recording, and productive-direction admission.
+%   constraints and history recording.
 %
 %   use_iteration_pattern_step         Whether pattern candidates are evaluated.
 %   use_momentum_extrapolation         Whether momentum is updated and momentum candidates
 %                                      may be evaluated.
-%   use_productive_direction_memory    Whether an accepted acceleration direction may be
-%                                      stored.
 %   momentum_decay                     Weight applied to the previous momentum vector.
-%   productive_direction_memory_size   Maximum number of retained productive directions.
 %   step_floor                         Lower bound for the pattern step and for normalizing
 %                                      momentum.
 %   MaxFunctionEvaluations             Total objective-evaluation budget.
@@ -106,7 +100,6 @@ end
 factors = [1.0, 2.0, 4.0];
 xbest = post_poll_acceleration_state.xbase;
 fbest = post_poll_acceleration_state.fbase;
-best_direction = [];
 momentum_improved = false;
 failed_momentum_point = [];
 
@@ -132,7 +125,6 @@ if acceleration_configuration.use_momentum_extrapolation && ~isempty(momentum_di
         if fnew < fbest
             xbest = xnew;
             fbest = fnew;
-            best_direction = momentum_direction;
             momentum_improved = true;
         else
             failed_momentum_point = xnew;
@@ -175,7 +167,6 @@ if ~target_reached && acceleration_configuration.use_iteration_pattern_step ...
         if fnew < fbest
             xbest = xnew;
             fbest = fnew;
-            best_direction = pattern_direction;
         else
             break;
         end
@@ -186,20 +177,11 @@ if ~target_reached && acceleration_configuration.use_iteration_pattern_step ...
     end
 end
 
-% Commit the best point found by whichever directional search succeeded and,
-% when enabled, admit its direction to productive-direction memory.
+% Commit the best point found by whichever directional search succeeded.
 if fbest < post_poll_acceleration_state.fbase
     acceleration_succeeded = true;
     post_poll_acceleration_state.xbase = xbest;
     post_poll_acceleration_state.fbase = fbest;
-    if acceleration_configuration.use_productive_direction_memory ...
-            && ~isempty(best_direction)
-        post_poll_acceleration_state.productive_direction_memory = ...
-            admit_productive_direction_to_memory( ...
-                post_poll_acceleration_state.productive_direction_memory, ...
-                best_direction, pattern_step, ...
-                acceleration_configuration.productive_direction_memory_size);
-    end
 end
 
 end

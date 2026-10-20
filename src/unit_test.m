@@ -10,6 +10,150 @@ tests = functiontests(localfunctions);
 
 end
 
+function run_post_poll_acceleration_phase_test(testcase)
+%RUN_POST_POLL_ACCELERATION_PHASE_TEST tests the file private/run_post_poll_acceleration_phase.m.
+% Explicit expected points and states check MP branches without a reference solver.
+
+pattern_direction = [1; 0];
+momentum_direction = [1.0 - 0.6; 0.6];
+momentum_direction = momentum_direction / norm(momentum_direction);
+for scenario = 1:20
+    configuration = struct('use_iteration_pattern_step', true, ...
+        'use_momentum_extrapolation', true, 'momentum_decay', 0.6, ...
+        'step_floor', 1e-6, 'MaxFunctionEvaluations', 20, ...
+        'ftarget', -inf, 'output_xhist', true);
+    initial_state = struct('xbase', [0; 0], 'fbase', 10, 'nf', 0, 'fhist', [], ...
+        'xhist', zeros(2, 0), 'invalid_points', zeros(2, 0), 'momentum', [0; 1]);
+
+    % Accepting a momentum point and rejecting the next must not trigger pattern.
+    values = [9, 11];
+    expected_points = [momentum_direction, 2 * momentum_direction];
+    best_evaluation = 1;
+    error_at = 0;
+    switch scenario
+        case 2
+            % Pattern is a fallback only when momentum accepted no point.
+            values = [11, 9, 11];
+            expected_points = [momentum_direction, pattern_direction, 2 * pattern_direction];
+            best_evaluation = 2;
+        case 3
+            values = [11, 11];
+            expected_points = [momentum_direction, pattern_direction];
+            best_evaluation = 0;
+        case 4
+            % Do not reevaluate an identical rejected momentum/pattern point.
+            initial_state.momentum = [1; 0];
+            values = 11;
+            expected_points = pattern_direction;
+            best_evaluation = 0;
+        case 5
+            configuration.MaxFunctionEvaluations = 1;
+            values = 11;
+            expected_points = momentum_direction;
+            best_evaluation = 0;
+        case 6
+            configuration.ftarget = 9;
+            values = 9;
+            expected_points = momentum_direction;
+        case 7
+            % Zero previous momentum acquires the current iteration direction.
+            initial_state.momentum = zeros(2, 1);
+            expected_points = [pattern_direction, 2 * pattern_direction];
+        case 8
+            values = [nan, 11];
+            expected_points = [momentum_direction, pattern_direction];
+            best_evaluation = 0;
+        case 9
+            % Cancellation makes momentum unavailable; pattern still runs.
+            initial_state.momentum = [-2/3; 0];
+            expected_points = [pattern_direction, 2 * pattern_direction];
+        case 10
+            configuration.use_momentum_extrapolation = false;
+            expected_points = [pattern_direction, 2 * pattern_direction];
+        case 11
+            configuration.use_iteration_pattern_step = false;
+        case 12
+            configuration.use_momentum_extrapolation = false;
+            configuration.use_iteration_pattern_step = false;
+            values = [];
+            expected_points = zeros(2, 0);
+            best_evaluation = 0;
+        case 13
+            values = [inf, 9, 11];
+            expected_points = [momentum_direction, pattern_direction, 2 * pattern_direction];
+            best_evaluation = 2;
+        case 14
+            values = [nan, 9, 11];
+            error_at = 1;
+            expected_points = [momentum_direction, pattern_direction, 2 * pattern_direction];
+            best_evaluation = 2;
+        case 15
+            configuration.MaxFunctionEvaluations = 2;
+            values = [9, 8];
+            best_evaluation = 2;
+        case 16
+            configuration.MaxFunctionEvaluations = 0;
+            values = [];
+            expected_points = zeros(2, 0);
+            best_evaluation = 0;
+        case 17
+            values = [9, 8, 7];
+            expected_points = [momentum_direction, 2 * momentum_direction, 4 * momentum_direction];
+            best_evaluation = 3;
+        case 18
+            configuration.output_xhist = false;
+            values = [nan, 11];
+            expected_points = [momentum_direction, pattern_direction];
+            best_evaluation = 0;
+        case 19
+            values = -inf;
+            expected_points = momentum_direction;
+        case 20
+            configuration.ftarget = 9;
+            values = [11, 9];
+            expected_points = [momentum_direction, pattern_direction];
+            best_evaluation = 2;
+    end
+
+    count = 0;
+    points = zeros(2, 0);
+    [actual_state, succeeded, target_reached] = run_post_poll_acceleration_phase( ...
+        @objective, initial_state, configuration, pattern_direction);
+
+    expected_state = initial_state;
+    expected_state.nf = numel(values);
+    expected_state.fhist = values;
+    if configuration.use_momentum_extrapolation
+        expected_state.momentum = 0.6 * initial_state.momentum ...
+            + (1.0 - 0.6) * pattern_direction;
+    end
+    if best_evaluation > 0
+        expected_state.xbase = expected_points(:, best_evaluation);
+        expected_state.fbase = values(best_evaluation);
+    end
+    if configuration.output_xhist
+        expected_state.xhist = expected_points;
+        expected_state.invalid_points = expected_points(:, isnan(values));
+    end
+    diagnostic = sprintf('MP scenario %d.', scenario);
+    verifyEqual(testcase, count, numel(values), diagnostic);
+    verifyEqual(testcase, points, expected_points, diagnostic);
+    verifyEqual(testcase, actual_state, expected_state, diagnostic);
+    verifyEqual(testcase, succeeded, best_evaluation > 0, diagnostic);
+    verifyEqual(testcase, target_reached, any(scenario == [6, 19, 20]), diagnostic);
+end
+
+    function value = objective(x)
+        count = count + 1;
+        points(:, count) = x;
+        if count == error_at
+            error('unit_test:ObjectiveFailure', 'Intentional objective failure.');
+        end
+        value = values(count);
+    end
+
+end
+
 function cycling_test(testcase)
 %CYCLING_TEST tests the file private/cycling.m.
 
@@ -268,16 +412,8 @@ constant_name = "debug_flag";
 constant_value = false;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
-constant_name = "productive_direction_memory_size_cap";
-constant_value = 5;
-verifyEqual(testcase, get_default_constant(constant_name), constant_value)
-
 constant_name = "momentum_decay";
 constant_value = 0.6;
-verifyEqual(testcase, get_default_constant(constant_name), constant_value)
-
-constant_name = "use_productive_direction_memory";
-constant_value = false;
 verifyEqual(testcase, get_default_constant(constant_name), constant_value)
 
 constant_name = "use_iteration_pattern_step";
@@ -334,7 +470,8 @@ options.StepTolerance = [1e-6, 1e-6, 1e-6];
 resolved = set_options(options, n, x0);
 verifyEqual(testcase, resolved.MaxFunctionEvaluations, 500 * n)
 verifyEqual(testcase, resolved.expand, 2.0)
-verifyFalse(testcase, resolved.use_productive_direction_memory)
+verifyFalse(testcase, isfield(resolved, 'use_productive_direction_memory'))
+verifyFalse(testcase, isfield(resolved, 'productive_direction_memory_size'))
 verifyTrue(testcase, resolved.use_iteration_pattern_step)
 verifyTrue(testcase, resolved.use_momentum_extrapolation)
 
@@ -342,6 +479,27 @@ options.num_blocks = 2;
 options.StepTolerance = [1e-6, 1e-6];
 resolved = set_options(options, n, x0);
 verifyEqual(testcase, resolved.StepTolerance, [1e-6; 1e-6])
+
+end
+
+function removed_retained_options_test(testcase)
+
+for value = {false, []}
+    resolved = set_options(struct('use_productive_direction_memory', value{1}), 2, [1;2]);
+    verifyFalse(testcase, isfield(resolved, 'use_productive_direction_memory'))
+    verifyFalse(testcase, isfield(resolved, 'productive_direction_memory_size'))
+end
+verifyError(testcase, @() set_options( ...
+    struct('use_productive_direction_memory', true), 2, [1;2]), ...
+    'BDS:RemovedProductiveDirectionMemory')
+for value = {0, 1, 'false', [false,false], NaN}
+    verifyError(testcase, @() set_options( ...
+        struct('use_productive_direction_memory', value{1}), 2, [1;2]), ...
+        'BDS:InvalidLogicalOption')
+end
+verifyWarning(testcase, @() set_options( ...
+    struct('productive_direction_memory_size', 5), 2, [1;2]), ...
+    'BDS:DeprecatedProductiveDirectionMemorySize')
 
 end
 

@@ -87,6 +87,25 @@ assert_benchmark_bds_options( ...
     BDS_PROFILE_MAPPING_CALLS.bds_options_history{1}, false, false, false);
 assert(BDS_PROFILE_MAPPING_CALLS.recording_objective_calls > 0);
 
+for name = {'cbds-memory-only-200n', 'cbds_memory_only_200n', ...
+        'lean-evolved-bds-memory-only'}
+    try
+        run_profile(name, stub_dir);
+        error('verify_profile_workflow_mappings:MissingError', 'Removed profile was accepted.');
+    catch exception
+        assert(strcmp(exception.identifier, ...
+            'profile_optiprofiler:RemovedProductiveDirectionMemory'));
+    end
+end
+for name = {'accelerated-bds-all-on-200n', 'accelerated-ds-all-on-200n', ...
+        'bds-accelerated', 'lean-evolved-bds-no-memory'}
+    BDS_PROFILE_MAPPING_CALLS = struct();
+    run_profile(name, stub_dir);
+    options = BDS_PROFILE_MAPPING_CALLS.bds_options;
+    assert(~isfield(options, 'use_productive_direction_memory'));
+    assert(options.use_iteration_pattern_step && options.use_momentum_extrapolation);
+end
+
 clear global BDS_PROFILE_MAPPING_CALLS
 clear cleanup
 
@@ -128,7 +147,7 @@ assert(options.forcing_function(3) == 9);
 assert(isequal(options.reduction_factor, [0, eps, eps]));
 assert(strcmp(options.polling_inner, 'opportunistic'));
 assert(options.cycling_inner == 1);
-assert(options.use_productive_direction_memory == use_acceleration);
+assert(~isfield(options, 'use_productive_direction_memory'));
 assert(options.use_iteration_pattern_step == use_acceleration);
 assert(options.use_momentum_extrapolation == use_acceleration);
 assert(options.use_function_value_stop == use_function_stop);

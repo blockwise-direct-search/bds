@@ -85,7 +85,6 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
 
     function verify_acceleration_on_zero_gradient_stop()
         options = gradient_stop_options();
-        options.use_productive_direction_memory = true;
         options.use_iteration_pattern_step = true;
         options.use_momentum_extrapolation = true;
         options.use_gradient_reference_consistency = true;

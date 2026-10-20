@@ -65,12 +65,13 @@ The default accelerated solver can be called directly:
 [xopt, fopt] = bds(fun, x0);
 ```
 
-**Advanced option:** productive-direction memory tries previously successful
-directions before regular polling. It remains available, but is now **disabled
-by default** (previous versions enabled it and used pattern → momentum).
-Enable it explicitly with `options.use_productive_direction_memory = true`.
-The two post-poll switches remain enabled by default; there is no public order
-selector. Changing the default does not change any frozen experimental result.
+Retained productive-direction memory has been removed. The two post-poll
+switches remain enabled by default; there is no public order selector.
+For legacy callers, `use_productive_direction_memory=false` (or empty) is
+accepted without creating memory state; `true` raises a clear error.
+`productive_direction_memory_size` is ignored with a deprecation warning.
+Historical retained experiments require their original solver version; frozen
+experimental results are not changed by this removal.
 
 For explicit internal/external paper settings, use
 [`bds_paper_options`](examples/bds_paper_options.m); see
@@ -78,10 +79,9 @@ For explicit internal/external paper settings, use
 is not a recipe for reproducing all paper experiments.
 
 Each mechanism can be controlled independently. To recover the non-accelerated
-polling behavior under otherwise identical explicit options, disable all three:
+polling behavior under otherwise identical explicit options, disable both:
 
 ```matlab
-options.use_productive_direction_memory = false;
 options.use_iteration_pattern_step = false;
 options.use_momentum_extrapolation = false;
 [xopt, fopt] = bds(fun, x0, options);

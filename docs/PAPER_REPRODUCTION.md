@@ -2,7 +2,7 @@
 
 本次对齐以 2026-10-19 核对的 C06 内部实验、C04 外部实验为依据。
 生产入口是 `src/bds.m`。默认使用 momentum → pattern（MP），retained
-productive-direction memory 默认关闭但仍可显式启用。其余默认参数不变。
+productive-direction memory 已从 production 移除。其余默认参数不变。
 这里的配置入口不启动 benchmark，也不声称修改默认值验证了历史性能结论。
 
 ## 可运行入口
@@ -18,13 +18,16 @@ options = bds_paper_options(x0, 'internal', 'mp');
 ```
 
 `examples/bds_paper_options.m` 逐项列出实际 option 名称和值，不根据 solver
-显示名称猜测，也不依赖默认值补齐论文设置。
+显示名称猜测，也不依赖默认值补齐论文设置。已移除的 retained 两个字段不再传给
+production；冻结 MP 比较端仍显式使用原来的 false 和 `max(1,min(n,5))`，两侧 options
+分别保存。移除的是从未启用的机制，不改变论文 MP 的配置含义。
 
 解析约定也需明确：`Algorithm='cbds'` / `'ds'` 确定分块及访问方式，因此不再同时传入
 互斥的 `num_blocks`、`batch_size` 或 `block_visiting_pattern`；冻结入口没有传
 `direction_set`，在本次核对的 production parser 中对应坐标方向 `{±e_i}`。
-标量步长和容差按块展开。这里保留原始 options 的字段集合，并核对这些解析行为，
-不声称任意未来版本改变接口约定后仍无需重新验证。
+标量步长和容差按块展开。这里核对这些解析行为，
+不声称任意未来版本改变接口约定后仍无需重新验证。除上述两个弃用字段外，原始 options
+字段和值不变。
 
 | 入口参数 | 块/加速 | 初始步长 | 函数值/梯度额外停机 |
 | --- | --- | --- | --- |
@@ -42,8 +45,9 @@ options = bds_paper_options(x0, 'internal', 'mp');
 
 普通软件默认值不等于外部比较设置：软件默认 `alpha_init=1`，两种额外停机
 关闭；默认 seed 仍为 `'shuffle'`。需要复现时使用显式入口。
-若需要 retained，另设 `options.use_productive_direction_memory=true`；这不再是
-论文中的无 retained 配置。没有新增 PM/MP 顺序 API。
+旧 retained 开关 false 或空值兼容，true 明确报错；旧容量参数警告后忽略。
+需要复现 retained 历史实验时应使用相应历史代码（移除前版本 `ece5ab04`），
+不能把当前 MP 冒充原实验配置。没有新增 PM/MP 顺序 API。
 
 ## 与算法参数分开的 benchmark 协议
 
@@ -76,3 +80,6 @@ options = bds_paper_options(x0, 'internal', 'mp');
 验证同时记录 `iseqiv(prec=0)` 与完整轨迹比较；诊断时两边同时打开 histories，
 与冻结实验默认关闭输出历史的设置区分记录。smoke test 和 plain 轨迹回归都不等于
 整套论文性能实验复现。
+
+后续 retained 移除与重新验证记录见
+[`BDS_RETAINED_REMOVAL_EXECUTION_20261020.md`](development/BDS_RETAINED_REMOVAL_EXECUTION_20261020.md)。

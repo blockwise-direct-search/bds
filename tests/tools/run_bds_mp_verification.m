@@ -29,10 +29,14 @@ try
                 experiment = experiment_cell{1};
                 actual = bds_paper_options([1;2], experiment, 'mp');
                 expected = frozen.([experiment, '_options']);
+                assert(~expected.use_productive_direction_memory);
+                assert(expected.productive_direction_memory_size == 2);
+                expected = rmfield(expected, ...
+                    {'use_productive_direction_memory', 'productive_direction_memory_size'});
                 assert(strcmp(func2str(actual.forcing_function), func2str(expected.forcing_function)));
                 assert(isequaln(rmfield(actual, 'forcing_function'), rmfield(expected, 'forcing_function')));
             end
-            summary.phase = verify_bds_mp_phase(@c03_phase_mp);
+            verify_bds_removed_retained_options();
             summary.defaults = verify_bds_mp_defaults(@c03_bds_mp, result_directory);
             mkdir(fullfile(result_directory, 'iseqiv'));
             summary.iseqiv = verify_bds_mp_reference(fullfile(result_directory, 'iseqiv'), 'smoke');
@@ -45,6 +49,10 @@ try
             summary = verify_bds_mp_reference(result_directory, 'full');
         case 'manifest'
             summary = verify_bds_mp_manifest(fullfile(c06, 'problem_manifest.mat'), result_directory, 'full');
+        case 'manifest_internal'
+            summary = verify_bds_mp_manifest(fullfile(c06, 'problem_manifest.mat'), result_directory, 'internal');
+        case 'manifest_external'
+            summary = verify_bds_mp_manifest(fullfile(c06, 'problem_manifest.mat'), result_directory, 'external');
         case 'regression'
             run_bds_regression_suite();
             summary.completed = true;

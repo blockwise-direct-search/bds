@@ -138,49 +138,18 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               different random sequences across runs.
 %
 %   The following options are related to the acceleration steps.
-%   All three acceleration mechanisms operate on complete n-dimensional
+%   Both acceleration mechanisms operate on complete n-dimensional
 %   displacements produced by successful polling updates. They therefore
 %   support every valid block partition: changing num_blocks changes how the
 %   polling steps are formed, but does not change the representation used by
 %   the acceleration phases. In particular, num_blocks = 1 supplies the one
 %   block's successful displacement, while num_blocks = n may accumulate
 %   successful displacements from multiple one-direction blocks.
-%   use_productive_direction_memory   Whether to try productive search directions retained from
-%                                     previous iterations before the regular block-polling phase.
-%                                     The memory is an ordered list that is retained across
-%                                     iterations rather than reset after each iteration. Each
-%                                     entry stores a normalized productive direction together
-%                                     with the step length associated with that direction. A
-%                                     direction is considered productive if it produces an
-%                                     accepted polling update or a successful iteration-level
-%                                     acceleration step.
-%                                     The list contains at most
-%                                     productive_direction_memory_size entries. When the list
-%                                     is full and a new direction is admitted, its oldest entry
-%                                     is removed. A direction that is nearly parallel or
-%                                     antiparallel to a direction already in the list is not
-%                                     stored as a separate entry.
-%                                     At the beginning of each iteration, the retained directions
-%                                     are considered in list order before regular polling. For a
-%                                     retained direction, the algorithm evaluates a candidate point
-%                                     obtained by stepping from the current base point along that
-%                                     direction. The trial step length is the larger of the
-%                                     current mean block step size and the stored step length.
-%                                     If the candidate improves the objective function, it is
-%                                     accepted, and up to two further candidates may be evaluated
-%                                     by extrapolating farther along the same direction with
-%                                     successively doubled step lengths. The memory phase stops
-%                                     after such a productive direction is found or after all
-%                                     retained directions have been considered.
-%                                     In summary, enabling this option adds an opportunistic
-%                                     search over retained productive directions before the
-%                                     regular BDS block-polling phase.
-%                                     Default: false.
-%   productive_direction_memory_size  Maximum number of entries retained in the ordered
-%                                     productive-direction memory. This option limits the number
-%                                     of stored entries, each consisting of a direction and its
-%                                     associated step length. It does not limit the length or
-%                                     magnitude of the directions. Default: max(1, min(n, 5)).
+%   Retained-direction acceleration has been removed. For legacy callers,
+%   use_productive_direction_memory=false (or empty) is accepted and discarded;
+%   true raises an error. productive_direction_memory_size is discarded with
+%   a deprecation warning. Neither legacy field creates any memory state.
+%
 %   use_iteration_pattern_step        Whether to perform an additional search after the regular
 %                                     polling phase of an iteration. The search is attempted only
 %                                     when the base point at the end of the iteration has a lower
@@ -204,8 +173,7 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                     the objective value is less than or equal to ftarget, or when
 %                                     the function evaluation budget is exhausted. If the search
 %                                     improves the objective function, the best candidate becomes
-%                                     the new base point and its direction may be stored in the
-%                                     productive direction memory.
+%                                     the new base point.
 %                                     If use_momentum_extrapolation is enabled, the momentum vector
 %                                     is updated from the same normalized iteration displacement
 %                                     before this search, regardless of whether the pattern search
@@ -244,9 +212,7 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                     point as the rejected momentum candidate, that search stops
 %                                     so that the objective function is not
 %                                     evaluated twice. If the momentum search improves the objective
-%                                     function, the best candidate becomes the new base point and
-%                                     its direction may be stored in the productive direction
-%                                     memory.
+%                                     function, the best candidate becomes the new base point.
 %                                     In summary, this option updates a direction averaged over
 %                                     successful iteration displacements and may use that direction
 %                                     for the first additional search after regular polling.
@@ -582,9 +548,6 @@ cycling_inner = options.cycling_inner;
 seed = options.seed;
 random_stream = RandStream("mt19937ar", "Seed", seed);
 
-productive_direction_memory_size = options.productive_direction_memory_size;
-% Initialize an empty memory whose entries store a normalized direction and its associated step.
-productive_direction_memory = struct('direction', {}, 'step', {});
 momentum = zeros(n, 1);
 momentum_decay = options.momentum_decay;
 
@@ -596,13 +559,11 @@ if output_xhist
 end
 fhist = nan(1, MaxFunctionEvaluations);
 
-% Read-only configuration shared by the two acceleration-phase helpers.
+% Read-only configuration for the post-poll acceleration phase.
 acceleration_configuration = struct( ...
-    'use_productive_direction_memory', options.use_productive_direction_memory, ...
     'use_iteration_pattern_step', options.use_iteration_pattern_step, ...
     'use_momentum_extrapolation', options.use_momentum_extrapolation, ...
     'momentum_decay', momentum_decay, ...
-    'productive_direction_memory_size', productive_direction_memory_size, ...
     'step_floor', max(alpha_tol), ...
     'MaxFunctionEvaluations', MaxFunctionEvaluations, ...
     'ftarget', ftarget, ...
@@ -736,30 +697,6 @@ for iter = 1:maxit
     % that phase's own acceptance rule.
     post_poll_acceleration_succeeded = false;
 
-    % Pre-poll phase: try the productive directions retained from previous iterations.
-    % productive_direction_memory_state packs exactly the mutable state the
-    % phase may update; the terminate/exitflag update stays in this caller.
-    productive_direction_memory_state = struct( ...
-        'xbase', xbase, 'fbase', fbase, ...
-        'nf', nf, 'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
-        'productive_direction_memory', productive_direction_memory);
-    [productive_direction_memory_state, pre_poll_target_reached] = ...
-        run_productive_direction_memory_phase( ...
-            fun, productive_direction_memory_state, ...
-            acceleration_configuration, mean(alpha_all));
-    xbase = productive_direction_memory_state.xbase;
-    fbase = productive_direction_memory_state.fbase;
-    nf = productive_direction_memory_state.nf;
-    fhist = productive_direction_memory_state.fhist;
-    xhist = productive_direction_memory_state.xhist;
-    invalid_points = productive_direction_memory_state.invalid_points;
-    productive_direction_memory = ...
-        productive_direction_memory_state.productive_direction_memory;
-    if pre_poll_target_reached
-        terminate = true;
-        exitflag = get_exitflag("FTARGET_REACHED");
-    end
-
     % Define block_indices, a vector that specifies both the indices of the blocks
     % and the order in which they will be visited during the current iteration.
     % The length of block_indices is equal to batch_size.
@@ -889,9 +826,6 @@ for iter = 1:maxit
         % directions in the i_real-th block when we perform the direct search in this block next time.
         grouped_direction_indices{i_real} = sub_output.direction_indices;
 
-        % Store the base point before a possible update in this block.
-        xbase_before_block = xbase;
-
         % Whether to update xbase and fbase. xbase serves as the "base point" for the computation
         % in the next block, meaning that reduction will be calculated with respect to xbase, as
         % shown above. The condition must be checked before updating alpha_all(i_real) because the
@@ -932,18 +866,6 @@ for iter = 1:maxit
         if ~strcmpi(block_visiting_pattern, "parallel") && update_base
             xbase = sub_xopt;
             fbase = sub_fopt;
-
-            % The regular-polling update for this block is complete. Record the accepted
-            % block displacement as one entry in the productive-direction memory. The memory
-            % can retain multiple normalized directions for consideration during the pre-poll
-            % phase of later iterations.
-            block_step = sub_xopt - xbase_before_block;
-            block_step_norm = norm(block_step);
-            if options.use_productive_direction_memory && block_step_norm > alpha_tol(i_real)
-                productive_direction_memory = admit_productive_direction_to_memory( ...
-                    productive_direction_memory, block_step, block_step_norm, ...
-                    productive_direction_memory_size);
-            end
         end
     end
 
@@ -999,7 +921,6 @@ for iter = 1:maxit
         post_poll_acceleration_state = struct( ...
             'xbase', xbase, 'fbase', fbase, ...
             'nf', nf, 'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
-            'productive_direction_memory', productive_direction_memory, ...
             'momentum', momentum);
         [post_poll_acceleration_state, post_poll_acceleration_succeeded, ...
             post_poll_target_reached] = run_post_poll_acceleration_phase( ...
@@ -1011,8 +932,6 @@ for iter = 1:maxit
         fhist = post_poll_acceleration_state.fhist;
         xhist = post_poll_acceleration_state.xhist;
         invalid_points = post_poll_acceleration_state.invalid_points;
-        productive_direction_memory = ...
-            post_poll_acceleration_state.productive_direction_memory;
         momentum = post_poll_acceleration_state.momentum;
         if post_poll_target_reached
             terminate = true;

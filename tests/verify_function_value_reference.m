@@ -50,7 +50,6 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
 
     function verify_acceleration_on_recovery()
         options = function_stop_options();
-        options.use_productive_direction_memory = true;
         options.use_iteration_pattern_step = true;
         options.use_momentum_extrapolation = true;
         stop_options = lean_stop_options(2);
@@ -61,11 +60,17 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
             @(x) accelerated_recovery_objective(x, 0), stop_options, false);
 
         expected_calls = [0, 1, 2, 3, 7, 5, 1, 5, 5, 4, 2];
-        assert(isequal(production_calls, expected_calls) ...
-                && isequal(lean_calls, expected_calls), ...
-            ['The acceleration-on solvers did not continue past the first ', ...
-            'finite window before stopping on a stable window.']);
-        assert_same_lean_result(production_result, lean_result);
+        assert(isequal(lean_calls, expected_calls), ...
+            'The historical retained-enabled lean trajectory changed.');
+        % The unmodified C06 MP oracle with retained=false gives this path.
+        % The historical lean solver above still executes retained searches.
+        expected_mp_calls = [0, 1, 2, 3, 5, 7, -1];
+        assert(isequal(production_calls, expected_mp_calls));
+        assert(isequal(production_result.output.xhist, expected_mp_calls));
+        assert(production_result.output.funcCount == numel(expected_mp_calls));
+        assert(production_result.exitflag == 4 ...
+            && production_result.x == 3 && production_result.f == 5, ...
+            'MP did not continue past the first finite window before function-value stopping.');
         assert(lean_result.exitflag == 4 && lean_result.output.iterations == 3, ...
             'The acceleration-on recovery case did not use function-value stopping.');
 
@@ -75,9 +80,8 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
             @(x) accelerated_recovery_objective(x, 100), stop_options, false);
         assert_translation_invariant(production_result, production_calls, ...
             shifted_production_result, shifted_production_calls, 100);
-        assert_same_lean_result(shifted_production_result, shifted_lean_result);
-        assert(isequal(shifted_production_calls, shifted_lean_calls), ...
-            'The shifted acceleration-on objective changed the lean call sequence.');
+        assert_translation_invariant(lean_result, lean_calls, ...
+            shifted_lean_result, shifted_lean_calls, 100);
     end
 
     function verify_nontriggering_lean_snapshot()
@@ -107,7 +111,6 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
             'Finite-initial-value behavior changed in the acceleration-off case.');
 
         on_options = options;
-        on_options.use_productive_direction_memory = true;
         on_options.use_iteration_pattern_step = true;
         on_options.use_momentum_extrapolation = true;
         [on_result, on_calls] = run_production(constant_objective, on_options);
