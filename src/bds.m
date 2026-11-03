@@ -291,10 +291,13 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                                Default: 1.
 %   grad_tol                                     Tolerance for the reference-scaled estimated gradient
 %                                                norm. After a reliable reference norm G_ref has been
-%                                                initialized, every value G in the gradient window must
-%                                                satisfy G < grad_tol * max(1, G_ref). Thus grad_tol is
-%                                                an absolute tolerance when G_ref <= 1 and a relative
-%                                                tolerance when G_ref > 1.
+%                                                initialized, the solver stops if every value G in the
+%                                                gradient window satisfies either
+%                                                G < grad_tol * min(1, G_ref), or
+%                                                G < 1e-3 * grad_tol * max(1, G_ref).
+%                                                The two branches have the same form as function-value
+%                                                stopping, with G_ref as the fixed reference scale.
+%                                                The reference estimate is not part of the window.
 %                                                Default: 1e-2.
 %   lipschitz_constant                           Estimate of the objective function's Lipschitz constant.
 %                                                It is used to compute the gradient error bound when
@@ -1047,12 +1050,16 @@ for iter = 1:maxit
                     norm_grad_window = [norm_grad_window(2:end), norm(grad) + grad_error];
                 end
 
-                % The fixed reliable reference can appear well after iteration zero.
-                % max(1, reference_grad_norm) supplies an absolute scale for a small reference
-                % and a relative scale for a large reference.
+                % Use the same two-branch form as function-value stopping, but with the
+                % fixed reliable gradient reference instead of the objective decrease.
+                % The first branch requires an absolute and a relative tolerance together;
+                % the second supplies a smaller absolute or relative fallback tolerance.
+                % Every entry must pass one branch, so an incomplete window cannot stop.
                 if reference_grad_norm_initialized ...
-                        && all(norm_grad_window ...
-                            < grad_tol * max(1, reference_grad_norm))
+                        && (all(norm_grad_window ...
+                            < grad_tol * min(1, reference_grad_norm)) ...
+                            || all(norm_grad_window ...
+                            < 1e-3 * grad_tol * max(1, reference_grad_norm)))
                     terminate = true;
                     exitflag = get_exitflag("SMALL_ESTIMATE_GRADIENT");
                 end

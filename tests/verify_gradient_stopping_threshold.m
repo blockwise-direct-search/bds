@@ -1,5 +1,11 @@
 function verify_gradient_stopping_threshold()
-%VERIFY_GRADIENT_STOPPING_THRESHOLD Check the reference-scaled gradient rule.
+%VERIFY_GRADIENT_STOPPING_THRESHOLD Check the two-branch gradient stopping rule.
+%
+%   These black-box cases call the production solver, not its private helpers.
+%   Prescribed finite differences exercise both branches, strict boundaries,
+%   reference initialization, and incomplete or nonuniform gradient windows.
+%   The frozen reference retains its old rule. Compare it only where the two
+%   criteria agree, and explicitly check the intended difference otherwise.
 
 tests_dir = fileparts(mfilename('fullpath'));
 root_dir = fileparts(tests_dir);
@@ -8,134 +14,122 @@ cleanup = onCleanup(@() path(oldpath));
 addpath(fullfile(root_dir, 'src'));
 addpath(fullfile(tests_dir, 'competitors'));
 
-verify_reference_regimes();
-verify_window_requires_every_entry();
-verify_acceleration_on_matches_lean();
-verify_removed_option_is_rejected();
-
-fprintf('GRADIENT_STOPPING_THRESHOLD_OK\n');
-
-    function verify_reference_regimes()
-        grad_tol = 0.25;
-        reference_norms = [0.25, 1, 4];
-
-        for reference_norm = reference_norms
-            threshold = grad_tol * max(1, reference_norm);
-            current_norms = [threshold / 2, threshold, 2 * threshold];
-            expected_exitflags = [5, 1, 1];
-
-            for i = 1:numel(current_norms)
-                [reference_result, reference_calls] = run_reference_case( ...
-                    reference_norm, current_norms(i), 1, 5, grad_tol);
-                [production_result, production_calls] = run_production_case( ...
-                    reference_norm, current_norms(i), 1, 5, grad_tol, false);
-
-                assert_same_result(reference_result, production_result);
-                assert(isequal(reference_calls, production_calls), ...
-                    'Acceleration-off changed the objective-call sequence.');
-                assert(reference_result.exitflag == expected_exitflags(i), ...
-                    'Unexpected decision at a gradient threshold boundary.');
-                if expected_exitflags(i) == 5
-                    assert(reference_result.output.funcCount == 5, ...
-                        'A sub-threshold gradient did not stop at the expected estimate.');
+behavior_cases = 0;
+for reference_norm = [0, 2^-12, 0.25, 1, 4, 2^12]
+    grad_tol = 0.25;
+    if reference_norm < 1e-3 || reference_norm > 1e3
+        % This fixture makes the fallback boundary exactly representable.
+        % It is not a change to the production default or experiment options.
+        grad_tol = 125;
+    end
+    threshold = max(grad_tol * min(1, reference_norm), ...
+        1e-3 * grad_tol * max(1, reference_norm));
+    for consistency = [false, true]
+        reference_samples = 1 + consistency;
+        for acceleration = [false, true]
+            for factor = [0.5, 1, 2]
+                options = stopping_options(1 + 2*(reference_samples + 1), ...
+                    1, grad_tol, consistency, acceleration);
+                actual = run_case(@bds, options, reference_norm, ...
+                    factor * threshold, reference_samples);
+                if factor < 1
+                    assert(actual.exitflag == 5, 'A strictly sub-threshold gradient did not stop.');
+                else
+                    assert(actual.exitflag == 1, 'The strict threshold boundary was not respected.');
                 end
+                assert(actual.output.funcCount == options.MaxFunctionEvaluations);
+                behavior_cases = behavior_cases + 1;
             end
+
+            options = stopping_options(1 + 2*(reference_samples + 4), ...
+                2, grad_tol, consistency, acceleration);
+            actual = run_case(@bds, options, reference_norm, ...
+                threshold * [0.5, 2, 0.5, 0.5], reference_samples);
+            assert(actual.exitflag == 5 && actual.output.funcCount == options.MaxFunctionEvaluations, ...
+                'The solver did not wait until every entry in the window was small.');
+
+            options.MaxFunctionEvaluations = 1 + 2*(reference_samples + 1);
+            actual = run_case(@bds, options, reference_norm, threshold / 2, reference_samples);
+            assert(actual.exitflag == 1, 'The reference estimate was incorrectly included in the window.');
+            behavior_cases = behavior_cases + 2;
         end
     end
+end
 
-    function verify_window_requires_every_entry()
-        reference_norm = 0.25;
-        grad_tol = 0.25;
-        low = grad_tol * max(1, reference_norm) / 2;
-        high = 2 * grad_tol * max(1, reference_norm);
-        later_norms = [low, high, low, low];
+% Both criteria stop at the first subsequent estimate in this shared case.
+options = stopping_options(7, 1, 0.25, false, false);
+actual = run_case(@bds, options, 0.25, 2^-5, 1);
+reference = run_case(@bds_without_acceleration_reference, ...
+    without_acceleration_fields(options), 0.25, 2^-5, 1);
+assert(isequaln(actual, reference) && actual.exitflag == 5 && actual.output.funcCount == 5);
 
-        [reference_result, reference_calls] = run_reference_case( ...
-            reference_norm, later_norms, 2, 11, grad_tol);
-        [production_result, production_calls] = run_production_case( ...
-            reference_norm, later_norms, 2, 11, grad_tol, false);
+% The old threshold is 1/4 and the new threshold is 1/16. A value of 1/8
+% must stop the old solver but not production; the following value 1/32
+% must stop production. Preserve the common evaluation prefix exactly.
+actual = run_case(@bds, options, 0.25, [2^-3, 2^-5], 1);
+reference = run_case(@bds_without_acceleration_reference, ...
+    without_acceleration_fields(options), 0.25, [2^-3, 2^-5], 1);
+assert(reference.exitflag == 5 && reference.output.funcCount == 5);
+assert(actual.exitflag == 5 && actual.output.funcCount == 7);
+assert(isequaln(reference.calls, actual.calls(:, 1:5)) ...
+    && isequaln(reference.output.fhist, actual.output.fhist(1:5)), ...
+    'The new stopping rule changed the common evaluation prefix.');
 
-        assert_same_result(reference_result, production_result);
-        assert(isequal(reference_calls, production_calls), ...
-            'Acceleration-off changed the multi-entry-window call sequence.');
-        assert(reference_result.exitflag == 5 ...
-                && reference_result.output.funcCount == 11, ...
-            'The solver stopped before every gradient-window entry was small.');
-    end
+% Turning gradient stopping off must recover complete frozen equivalence,
+% including on this case where the enabled criteria deliberately disagree.
+options.use_estimated_gradient_stop = false;
+actual = run_case(@bds, options, 0.25, [2^-3, 2^-5], 1);
+reference = run_case(@bds_without_acceleration_reference, ...
+    without_acceleration_fields(options), 0.25, [2^-3, 2^-5], 1);
+assert(isequaln(actual, reference) && actual.exitflag == 1);
 
-    function verify_acceleration_on_matches_lean()
-        reference_norm = 4;
-        grad_tol = 0.25;
-        current_norm = grad_tol * reference_norm / 2;
+removed_options = struct('grad_reference_relative_tol', 1e-2);
+assert_throws(@() bds(@(x) x^2, 0, removed_options), ...
+    'BDS:RemovedGradientReferenceRelativeTolerance');
+assert_throws(@() lean_evolved_bds(@(x) x^2, 0, removed_options), ...
+    'lean_evolved_bds:RemovedGradientReferenceRelativeTolerance');
 
-        [production_result, production_calls] = run_production_case( ...
-            reference_norm, current_norm, 1, 5, grad_tol, true);
-        [lean_result, lean_calls] = run_lean_case( ...
-            reference_norm, current_norm, grad_tol);
+fprintf('GRADIENT_STOPPING_THRESHOLD_OK behavior=%d shared=1 changed=1 disabled=1\n', behavior_cases);
+end
 
-        assert(isequal(production_calls, lean_calls), ...
-            'Acceleration-on and lean used different objective-call sequences.');
-        assert(isequaln(production_result.x, lean_result.x) ...
-                && isequaln(production_result.f, lean_result.f) ...
-                && production_result.exitflag == lean_result.exitflag ...
-                && production_result.output.funcCount == lean_result.output.funcCount, ...
-            'Acceleration-on differs from lean at the reference-scaled threshold.');
-        assert(production_result.exitflag == 5 ...
-                && production_result.output.funcCount == 5, ...
-            'The acceleration-on threshold case did not trigger as expected.');
-    end
+function options = stopping_options(maxfun, window, grad_tol, consistency, acceleration)
 
-    function verify_removed_option_is_rejected()
-        removed_options = struct('grad_reference_relative_tol', 1e-2);
-        assert_throws(@() bds(@(x) x^2, 0, removed_options), ...
-            'BDS:RemovedGradientReferenceRelativeTolerance');
-        assert_throws(@() lean_evolved_bds(@(x) x^2, 0, removed_options), ...
-            'lean_evolved_bds:RemovedGradientReferenceRelativeTolerance');
-    end
+options = struct('Algorithm', 'cbds', 'MaxFunctionEvaluations', maxfun, ...
+    'StepTolerance', 0, 'alpha_init', 1, 'expand', 2, 'shrink', 0.5, 'seed', 0, ...
+    'use_function_value_stop', false, 'use_estimated_gradient_stop', true, ...
+    'grad_window_size', window, 'grad_tol', grad_tol, 'lipschitz_constant', realmin, ...
+    'use_gradient_reference_consistency', consistency, ...
+    'use_iteration_pattern_step', acceleration, 'use_momentum_extrapolation', acceleration, ...
+    'output_xhist', true, 'output_grad_hist', true);
 
-    function [result, calls] = run_reference_case( ...
-            reference_norm, later_norms, window_size, maxfun, grad_tol)
-        options = stopping_options(window_size, maxfun, grad_tol);
-        [result, calls] = run_solver( ...
-            @bds_without_acceleration_reference, options, reference_norm, later_norms);
-    end
+end
 
-    function [result, calls] = run_production_case( ...
-            reference_norm, later_norms, window_size, maxfun, grad_tol, acceleration_on)
-        options = stopping_options(window_size, maxfun, grad_tol);
-        options.use_iteration_pattern_step = acceleration_on;
-        options.use_momentum_extrapolation = acceleration_on;
-        [result, calls] = run_solver( ...
-            @bds, options, reference_norm, later_norms);
-    end
+function options = without_acceleration_fields(options)
 
-    function [result, calls] = run_lean_case(reference_norm, later_norms, grad_tol)
-        calls = zeros(1, 0);
-        options = struct( ...
-            'use_estimated_gradient_stop', true, ...
-            'grad_window_size', 1, ...
-            'grad_tol', grad_tol, ...
-            'lipschitz_constant', realmin, ...
-            'use_gradient_reference_consistency', false);
-        [result.x, result.f, result.exitflag, result.output] = ...
-            lean_evolved_bds(@objective, 0, options);
+options = rmfield(options, {'use_iteration_pattern_step', 'use_momentum_extrapolation'});
 
-        function value = objective(x)
-            calls(end + 1) = x;
-            value = prescribed_value(x, reference_norm, later_norms);
+end
+
+function result = run_case(solver, options, reference_norm, later_norms, reference_samples)
+
+calls = zeros(1, 0);
+[result.x, result.f, result.exitflag, result.output] = solver(@objective, 0, options);
+result.calls = calls;
+assert(result.output.funcCount == numel(calls) && numel(calls) <= options.MaxFunctionEvaluations);
+assert(isequaln(result.output.xhist, calls) && numel(result.output.fhist) == numel(calls));
+
+    function value = objective(x)
+        calls(end + 1) = x;
+        if x == 0
+            value = 0;
+            return
         end
-    end
-
-    function [result, calls] = run_solver( ...
-            solver, options, reference_norm, later_norms)
-        calls = zeros(1, 0);
-        [result.x, result.f, result.exitflag, result.output] = ...
-            solver(@objective, 0, options);
-
-        function value = objective(x)
-            calls(end + 1) = x;
-            value = prescribed_value(x, reference_norm, later_norms);
+        iteration = 1 + round(-log2(abs(x)));
+        gradient = reference_norm;
+        if iteration > reference_samples
+            gradient = later_norms(min(iteration - reference_samples, numel(later_norms)));
         end
+        value = 10 * max(1, reference_norm) + gradient * x;
     end
 
 end
@@ -150,57 +144,5 @@ catch exception
     return
 end
 error('The removed gradient-reference option was silently accepted.');
-
-end
-
-function options = stopping_options(window_size, maxfun, grad_tol)
-
-options = struct( ...
-    'Algorithm', 'cbds', ...
-    'MaxFunctionEvaluations', maxfun, ...
-    'StepTolerance', 0, ...
-    'alpha_init', 1, ...
-    'expand', 2, ...
-    'shrink', 0.5, ...
-    'seed', 0, ...
-    'use_function_value_stop', false, ...
-    'use_estimated_gradient_stop', true, ...
-    'grad_window_size', window_size, ...
-    'grad_tol', grad_tol, ...
-    'lipschitz_constant', realmin, ...
-    'use_gradient_reference_consistency', false, ...
-    'output_xhist', true, ...
-    'output_grad_hist', true);
-
-end
-
-function value = prescribed_value(x, reference_norm, later_norms)
-
-if x == 0
-    value = 0;
-    return
-end
-
-step = abs(x);
-if step == 1
-    gradient = reference_norm;
-else
-    index = max(1, round(-log2(step)));
-    gradient = later_norms(min(index, numel(later_norms)));
-end
-value = 100 + gradient * x;
-
-end
-
-function assert_same_result(first, second)
-
-assert(isequaln(first.x, second.x) ...
-        && isequaln(first.f, second.f) ...
-        && first.exitflag == second.exitflag ...
-        && first.output.funcCount == second.output.funcCount ...
-        && isequaln(first.output.fhist, second.output.fhist) ...
-        && isequaln(first.output.xhist, second.output.xhist) ...
-        && isequaln(first.output.grad_hist, second.output.grad_hist), ...
-    'Production acceleration-off differs from the frozen BDS reference.');
 
 end

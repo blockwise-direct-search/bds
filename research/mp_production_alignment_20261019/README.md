@@ -4,7 +4,8 @@
 在相同 MATLAB 环境、显式 options 和随机 realization 下严格一致。
 
 主执行记录：[`docs/development/BDS_MP_ALIGNMENT_EXECUTION_20261019.md`](../../docs/development/BDS_MP_ALIGNMENT_EXECUTION_20261019.md)。
-软件复现入口：[`examples/bds_paper_options.m`](../../examples/bds_paper_options.m)。
+当前软件复现入口：[`tests/bds_paper_options.m`](../../tests/bds_paper_options.m)。
+历史验证快照仍保留当时的 examples 路径，不随当前代码布局迁移。
 
 服务器独立工作区：`/home/lhtian97/Work/bds_mp_verify_20261019_r1`。
 本机证据下载位置为本目录的 `testdata/`，按现有 `.gitignore` 规则不进入 Git。

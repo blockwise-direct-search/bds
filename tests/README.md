@@ -4,6 +4,11 @@ This directory contains maintained checks for the production solver. Research
 experiments, tuning studies, and their recorded results live under
 [`research/`](../research/README.md).
 
+`bds_paper_options.m` supplies explicit paper configurations for reproduction
+and verification. Add `src` and `tests` to the MATLAB path before using it;
+see [paper reproduction settings](../docs/PAPER_REPRODUCTION.md). Ordinary
+solver examples remain under `examples/` and do not require this helper.
+
 Run the complete production regression gate from MATLAB with:
 
 ```matlab

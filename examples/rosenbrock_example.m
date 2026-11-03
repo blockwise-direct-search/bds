@@ -18,9 +18,7 @@ function rosenbrock_example(options, x0)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Set options to an empty structure if it is not provided.
-% The default acceleration is momentum followed, when needed, by pattern;
-% retained-direction memory has been removed. For explicit paper settings, use
-% bds_paper_options(x0, 'internal', 'mp') or its 'external' configuration.
+% The default acceleration is momentum followed, when needed, by pattern.
 if nargin < 1
     options = struct();
 end

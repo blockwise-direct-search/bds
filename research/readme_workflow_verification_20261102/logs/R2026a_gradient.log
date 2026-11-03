@@ -1,0 +1,4 @@
+MATLAB_RELEASE=2026a STAGE=gradient
+TIME=02-Nov-2026 22:29:51
+Test passed! Actual gradient difference: 1.075135e-03, Theoretical bound: 1.344423e-02
+README_CHECK_OK 2026a gradient

@@ -1,0 +1,38 @@
+MATLAB_RELEASE=2024b STAGE=simplified_sequential
+TIME=02-Nov-2026 22:29:17
+
+--- Setting up S2MPJ ---
+
+S2MPJ not found. Cloning the repository...
+Executing: git clone https://github.com/optiprofiler/s2mpj_matlab.git "/home/lhtian97/Work/bds_readme_checks_20261102.Ftr9ll/optiprofiler/matlab/optiprofiler/problem_libs/s2mpj"
+Cloning into '/home/lhtian97/Work/bds_readme_checks_20261102.Ftr9ll/optiprofiler/matlab/optiprofiler/problem_libs/s2mpj'...
+/usr/lib/git-core/git-remote-https: symbol lookup error: /usr/lib/x86_64-linux-gnu/libcurl-gnutls.so.4: undefined symbol: libssh2_session_callback_set2
+fatal: remote helper 'https' aborted session
+ERROR: Failed to clone S2MPJ repository.
+Please manually clone or download "s2mpj_matlab" from:
+  https://github.com/optiprofiler/s2mpj_matlab
+Then rename the folder from "s2mpj_matlab" to "s2mpj" and place it at:
+  /home/lhtian97/Work/bds_readme_checks_20261102.Ftr9ll/optiprofiler/matlab/optiprofiler/problem_libs
+
+The package is ready to use.
+
+You may now try "help bds" for information on the usage of the package.
+
+You may also run "testbds" to test the package on a few examples.
+
+
+The package is ready to use.
+
+You may now try "help bds" for information on the usage of the package.
+
+You may also run "testbds" to test the package on a few examples.
+
+{Unrecognized function or variable 's2mpj_select'.
+
+Error in verify_simplified_bds (line 114)
+    problem_names_orig = s2mpj_select(options_s2mpj);
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in run_readme_check (line 28)
+    verify_simplified_bds(parameters);
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+} 

@@ -1,0 +1,81 @@
+{
+  "status": "verified",
+  "gates": {
+    "focused": {
+      "status": "completed exit_code=0 utc=2026-11-02T13:54:16Z",
+      "summary": {
+        "completed": 1
+      }
+    },
+    "regression": {
+      "status": "completed exit_code=0 utc=2026-11-02T13:55:50Z",
+      "summary": {
+        "completed": 1
+      }
+    },
+    "mp_strict_gradient_off": {
+      "status": "completed exit_code=0 utc=2026-11-02T13:59:17Z",
+      "summary": {
+        "iseqiv_passed": 1890,
+        "full_trace_passed": 1890,
+        "failed": 0
+      }
+    },
+    "matrix_retry2": {
+      "status": "completed exit_code=0 utc=2026-11-02T14:18:31Z",
+      "summary": {
+        "candidate_cases": 480,
+        "historical_cases": 240,
+        "gradient_stops": 142
+      }
+    },
+    "s2mpj_retry1": {
+      "status": "completed exit_code=0 utc=2026-11-02T14:17:48Z",
+      "summary": {
+        "candidate_cases": 192,
+        "historical_cases": 0,
+        "gradient_stops": 4
+      }
+    }
+  },
+  "source_audits": [
+    {
+      "status": "verified",
+      "files": 262,
+      "dependencies": 1348,
+      "only_final_predicate_changed": true
+    },
+    {
+      "status": "verified",
+      "production_matches_tested_executable_statements": true,
+      "private_matlab_files": 26,
+      "synced_files": 222
+    }
+  ],
+  "acceleration_off_cases": 1350,
+  "gradient_black_box_cases": 120,
+  "prior_attempt_statuses": {
+    "matrix": "failed exit_code=137 utc=2026-11-02T13:55:58Z",
+    "matrix_retry1": "completed exit_code=0 utc=2026-11-02T13:57:30Z",
+    "s2mpj": "failed exit_code=143 utc=2026-11-02T14:00:28Z"
+  },
+  "prior_attempt_notes": {
+    "matrix": "All assertions passed, then MATLAB aborted during exit with heap corruption. Retained; not counted as a passing run.",
+    "matrix_retry1": "Unchanged rerun completed normally. Repeated once more after the S2MPJ scheduling-only test edit.",
+    "s2mpj": "Single-process run intentionally terminated to rerun all 192 unchanged cases with eight workers."
+  },
+  "runtime_warnings": {
+    "s2mpj_retry1": "All 192 assertions and the summary completed before pool shutdown. One worker left an abort crash dump during shutdown; the client exited with code 0. The dump is retained on the server. This is not a claim of an anomaly-free MATLAB runtime."
+  },
+  "hashes": {
+    "candidate/src/bds.m": "2bbc3853cc56641e37ce839ac83cd677c0c97789d5f99fd4cb5dc385b9191194",
+    "SYNC_MANIFEST.json": "633613f57b5d8194e609b74e51b5aebf6a050db18b49f326d2876a9e14be7aa3",
+    "control/audit.py": "fb28d7c243d58ac69cd8e5ddbc0a85dcb1994d35c98efe20042e6b2aaa8626e6",
+    "control/collect_evidence.py": "b6b388e62bc08624900ff96932465b6bf6875091cc862b59cea9e784b61983fc",
+    "control/run.sh": "322c0b2780d8daadff130e9fe13bd390d790ca9b874efb6cd7b347d17d6fc0da",
+    "control/run_production_verification.m": "006c1534749163e77014c265b0b03b1ea5658debcf94e04b06b2d5af6f454393"
+  },
+  "external_solver_benchmark_run": false,
+  "paper_modified": false,
+  "full_trace_comparison": "isequaln, no tolerances or history truncation"
+}

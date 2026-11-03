@@ -1,0 +1,74 @@
+{
+  "status": "all_assertions_passed_with_serial_shutdown_issue",
+  "server_workspace": "/home/lhtian97/Work/bds_readme_checks_20261102.Ftr9ll",
+  "bds_base_commit": "67014737eaa9dbe47f7eb40e6d6829e27617277e",
+  "bds_worktree": "Current uncommitted dual-gradient-criterion snapshot; all 222 synchronized files unchanged.",
+  "optiprofiler_commit": "5a19e88cc34f9b8925e111934a6b12011422fcdb",
+  "s2mpj_commit": "352f97a792cb2727158bbff51ba38d6b0a07cc20",
+  "results": {
+    "R2024b_gradient_retry1": {
+      "status": "exit_code=0 utc=2026-11-02T14:30:34Z",
+      "assertions_passed": true,
+      "clean_exit": true,
+      "assertion": [
+        "Test passed! Actual gradient difference: 1.075135e-03, Theoretical bound: 1.344423e-02"
+      ]
+    },
+    "R2025a_gradient_retry1": {
+      "status": "exit_code=0 utc=2026-11-02T14:30:40Z",
+      "assertions_passed": true,
+      "clean_exit": true,
+      "assertion": [
+        "Test passed! Actual gradient difference: 1.075135e-03, Theoretical bound: 1.344423e-02"
+      ]
+    },
+    "R2026a_gradient": {
+      "status": "exit_code=0 utc=2026-11-02T14:29:53Z",
+      "assertions_passed": true,
+      "clean_exit": true,
+      "assertion": [
+        "Test passed! Actual gradient difference: 1.075135e-03, Theoretical bound: 1.344423e-02"
+      ]
+    },
+    "R2024b_simplified_sequential_retry1": {
+      "status": "exit_code=143 utc=2026-11-02T15:25:30Z",
+      "assertions_passed": true,
+      "clean_exit": false,
+      "problems": 172,
+      "cases": 860,
+      "weekly_seeds": [
+        "2645"
+      ],
+      "comparison": "Unchanged iseqiv_simplified at prec=0: x, f, exitflag, funcCount; no full-history assertion."
+    },
+    "R2024b_simplified_parallel": {
+      "status": "exit_code=0 utc=2026-11-02T14:40:36Z",
+      "assertions_passed": true,
+      "clean_exit": true,
+      "problems": 172,
+      "cases": 860,
+      "weekly_seeds": [
+        "2645"
+      ],
+      "comparison": "Unchanged iseqiv_simplified at prec=0: x, f, exitflag, funcCount; no full-history assertion."
+    }
+  },
+  "earlier_attempts": {
+    "R2025a_gradient": "exit_code=137 utc=2026-11-02T14:29:45Z",
+    "R2024b_simplified_sequential": "exit_code=127 utc=2026-11-02T14:31:03Z",
+    "R2024b_gradient": "exit_code=137 utc=2026-11-02T14:29:19Z"
+  },
+  "environment_notes": [
+    "Initial R2024b/R2025a gradient assertions passed but MATLAB aborted on exit (137); unchanged retries exited 0.",
+    "Initial simplified setup failed because MATLAB subprocess Git had a libcurl/libssh2 symbol conflict. Its stuck process was terminated. The dependency was cloned in the ordinary shell and unchanged tests rerun.",
+    "R2024b simplified sequential completed all 860 checks and printed README_CHECK_OK at 15:22:45 UTC. The process remained in futex wait with no new log output until 15:25:30 UTC; its exact PID 369555 was terminated with SIGTERM, yielding exit 143. This is NOT a clean process pass. Underlying shutdown cause is unresolved.",
+    "An isolated savepath shim made setup session-only; no shared pathdef/startup changes. Parallel execution used eight workers."
+  ],
+  "limits": [
+    "Linux server execution, not an actual GitHub Actions run.",
+    "No Windows/macOS or unavailable R2023b/R2024a validation.",
+    "Gradient estimation is not the final gradient-stopping-criterion test; that has a separate completed regression report.",
+    "No external solver benchmark, solver/test/workflow edits, commit or push."
+  ],
+  "source_manifest_sha256": "633613f57b5d8194e609b74e51b5aebf6a050db18b49f326d2876a9e14be7aa3"
+}

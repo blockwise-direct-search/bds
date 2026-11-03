@@ -24,6 +24,10 @@ This checks out the files needed to use BDS, including `README.md`, `LICENSE`,
 `setup.m`, `src/`, and `examples/`, without checking out the research,
 documentation, test, or workflow directories.
 
+Git also keeps repository metadata such as `.gitignore` and `.gitmodules` at
+the root. Sparse checkout limits the local working tree; it does not remove
+other material from the repository or prevent you from checking it out later.
+
 2. In MATLAB, change the current directory to the cloned `bds` folder and run:
 
 ```matlab
@@ -44,7 +48,7 @@ and robust handling of invalid function evaluations.
 
 ### Acceleration
 
-The public `bds` solver enables the paper's two post-poll acceleration mechanisms
+The public `bds` solver enables two post-poll acceleration mechanisms
 by default, in momentum → pattern order:
 
 - **Momentum extrapolation** combines successful iteration displacements across
@@ -73,11 +77,6 @@ accepted without creating memory state; `true` raises a clear error.
 Historical retained experiments require their original solver version; frozen
 experimental results are not changed by this removal.
 
-For explicit internal/external paper settings, use
-[`bds_paper_options`](examples/bds_paper_options.m); see
-[paper reproduction settings](docs/PAPER_REPRODUCTION.md). A default solver call
-is not a recipe for reproducing all paper experiments.
-
 Each mechanism can be controlled independently. To recover the non-accelerated
 polling behavior under otherwise identical explicit options, disable both:
 
@@ -104,6 +103,13 @@ options.use_estimated_gradient_stop = true;
 ```
 
 Both mechanisms are disabled by default and can be enabled independently.
+
+Estimated-gradient stopping retains a fixed reliable reference norm `G_ref`.
+After initialization, all estimates `G` in the subsequent window must satisfy
+`G < grad_tol * min(1, G_ref)`, or all must satisfy
+`G < 1e-3 * grad_tol * max(1, G_ref)`. This uses the same two-branch form as
+function-value stopping, with a different reference scale. The reference
+initialization checks are unchanged; `grad_tol` defaults to `1e-2`.
 
 ### Automatic initial step size
 

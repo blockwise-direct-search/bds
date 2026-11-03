@@ -1,0 +1,17 @@
+{
+  "status": "verified",
+  "stages": {
+    "smoke": "exit_code=0 utc=2026-11-03T02:35:59Z",
+    "regression": "exit_code=0 utc=2026-11-03T02:36:46Z"
+  },
+  "synced_files": 224,
+  "helper_sha256": "2eeecdf77f1fa96e80e0d351db6003f9be6029acbe6298829019de91b95185d4",
+  "helper_identical_to_before_move": true,
+  "configuration_pairs": 12,
+  "full_solver_output_pairs": 12,
+  "invalid_configuration_checks": 1,
+  "regression_acceleration_off_cases": 1350,
+  "gradient_boundary_cases": 120,
+  "benchmark_run": false,
+  "paper_manuscript_modified": false
+}

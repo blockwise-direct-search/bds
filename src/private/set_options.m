@@ -25,7 +25,7 @@ function options = set_options(options, n, x0)
 if isfield(options, 'grad_reference_relative_tol')
     error('BDS:RemovedGradientReferenceRelativeTolerance', ...
         ['options.grad_reference_relative_tol has been removed; use ', ...
-        'options.grad_tol for the single reference-scaled threshold.']);
+        'options.grad_tol for the reference-scaled gradient stopping criterion.']);
 end
 % Accept an explicitly disabled legacy switch, but never silently drop a
 % request to run the removed retained-direction acceleration.

@@ -1,0 +1,53 @@
+{
+  "status": "verified",
+  "seed": 2.026103E+7,
+  "feature": "noisy_1e-4",
+  "n_problems": 133,
+  "n_runs": 5,
+  "selected_labels": [
+    "FG_old",
+    "FG_new"
+  ],
+  "all_variant_total_calls": [
+    1.370917E+6,
+    1.085681E+6,
+    1.328862E+6,
+    1.347077E+6,
+    1.056766E+6,
+    1.073781E+6
+  ],
+  "new_solver_calls": 0,
+  "native_data_exact_match": true,
+  "native_curve_check_orders": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source_files_unchanged": true,
+  "input_sha256": "293f3b627bec1ff3abde2e014cd257da47520643add07fcc81af61993e75cdb6",
+  "control_manifest_sha256": "7bc0150125585f3c3fccf9d44140af6be8be5fd3f4890ad7c0082c1825863fca",
+  "benchmark_sha256": "857e493ebfd3de719f85e10372dc416dba16bcf7cea0ead3e6bc183bfc774c55",
+  "script_sha256": "5fb45a98af208e03956bc0cf293b38ecabbf04c92cbf7ab19f54820c3bb4e354",
+  "pdf_postprocessing": false,
+  "pdf_sha256": {
+    "history_all_tolerances_pdf": "71feb497320a3c9fd52d05f69e993aeae2bd789ee25dfc154d869c22afaa1165",
+    "history_tau_1e_2_pdf": "fb8af3df51b216ef350eaa6ea2939f6dc25688a1c8f48fa480794365eb019af8",
+    "history_tau_1e_4_pdf": "de5e2abb86e2ef0ab89ecb684852f0fa1674aa7a876a195d048bf1127632ffc9",
+    "output_all_tolerances_pdf": "0b29408690864843ff131e68fc574892a712528232c9a65b3ac75ca2bad3c50b"
+  },
+  "native_result": {
+    "marker": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/time_stamp_20261102_212827.txt",
+    "time_stamp": "20261102_212827",
+    "test_log": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log",
+    "root": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827",
+    "data_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/data_for_loading.mat",
+    "options_user_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/options_user.mat",
+    "options_refined_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/options_refined.mat",
+    "report_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/report.txt",
+    "curves_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/curves.mat",
+    "profile_scores_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/test_log/profile_scores.mat",
+    "performance_history_pdf": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/perf_hist.pdf",
+    "performance_output_pdf": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed2/noisy_1e-4/native/BDS_old_BDS_new_u_6_50_noisy_1e-4_20261102_212827/perf_out.pdf"
+  }
+}

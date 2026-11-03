@@ -1,0 +1,15 @@
+{
+  "status": "accepted",
+  "stage": "preflight_retry1",
+  "cases": 78,
+  "real_runs_per_case": 13,
+  "features": [
+    "plain",
+    "noisy_1e-4",
+    "noisy_1e-2",
+    "linearly_transformed",
+    "linearly_transformed_noisy_1e-4",
+    "linearly_transformed_noisy_1e-2"
+  ],
+  "production_unchanged": true
+}

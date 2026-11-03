@@ -1,0 +1,53 @@
+{
+  "cases": 3458,
+  "configurations": 153,
+  "taus": [
+    0.01,
+    0.001,
+    0.0001
+  ],
+  "development_cases": 2782,
+  "holdout_cases": 676,
+  "selected": 0,
+  "selection_kind": "no_eligible_candidate",
+  "gradient_qualified": false,
+  "joint_qualified": false,
+  "baseline_evaluations": 8.497181E+6,
+  "function_only_evaluations": 7.120545E+6,
+  "function_only_losses": [
+    [
+      3,
+      2
+    ],
+    [
+      3,
+      1
+    ],
+    [
+      3,
+      1
+    ]
+  ],
+  "baseline_successes": [
+    [
+      2968,
+      2916
+    ],
+    [
+      2704,
+      2613
+    ],
+    [
+      2398,
+      2252
+    ]
+  ],
+  "real_validation": {
+    "status": "accepted",
+    "cases": 3458,
+    "selected": 0,
+    "all_prefixes_and_stops_verified": true
+  },
+  "status": "completed",
+  "interpretation": "Replay is screening evidence; selected configurations were rerun. Zero observed losses are not a universal guarantee. No production defaults or paper figures changed."
+}

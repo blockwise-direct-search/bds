@@ -1,4 +1,4 @@
-function summary = verify_bds_mp_reference(result_directory, mode)
+function summary = verify_bds_mp_reference(result_directory, mode, gradient_stop_enabled)
 %VERIFY_BDS_MP_REFERENCE Strict MP verification with iseqiv and complete traces.
 %
 %   SUMMARY = VERIFY_BDS_MP_REFERENCE(RESULT_DIRECTORY, MODE) requires BDS,
@@ -7,6 +7,17 @@ function summary = verify_bds_mp_reference(result_directory, mode)
 %   initial point, RNG state, full objective traces, and all solver outputs.
 %   Fixed internal/external paper settings and randomized option stress tests
 %   are separate suites. Nothing is truncated or compared with a tolerance.
+%   Optional GRADIENT_STOP_ENABLED overrides only that switch on both sides.
+%   Pass false to verify the unchanged MP mechanism against the old frozen
+%   solver after changing the final gradient stopping criterion. Omitting the
+%   argument preserves the historical settings; enabled gradient stopping is
+%   no longer expected to match the old criterion in general.
+
+if nargin < 3
+    gradient_stop_enabled = [];
+else
+    assert(islogical(gradient_stop_enabled) && isscalar(gradient_stop_enabled));
+end
 
 assert(ismember(mode, {'smoke', 'full'}));
 assert(~strcmp(which('bds'), which('c03_bds_mp')) && ~isempty(which('c03_bds_mp')));
@@ -57,6 +68,9 @@ end
             for k = 1:numel(names)
                 effective_options.(names{k}) = generated_options.(names{k});
             end
+        end
+        if ~isempty(gradient_stop_enabled)
+            effective_options.use_estimated_gradient_stop = gradient_stop_enabled;
         end
         effective_options.output_xhist = true;
         effective_options.output_alpha_hist = true;

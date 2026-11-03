@@ -1,0 +1,13 @@
+{
+  "status": "accepted",
+  "cases": 3458,
+  "features": [
+    "plain",
+    "noisy_1e-4",
+    "noisy_1e-2",
+    "linearly_transformed",
+    "linearly_transformed_noisy_1e-4",
+    "linearly_transformed_noisy_1e-2"
+  ],
+  "budget_factor": 500
+}

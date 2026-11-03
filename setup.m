@@ -71,11 +71,18 @@ if strcmp(action, "uninstall")
 end
 
 % Add the related paths to the MATLAB path, and then try saving the path.
-path_saved = add_save_path({src_dir, examples_dir, tests_dir}, package_name);
+path_strings = {src_dir, examples_dir};
+% A solver-only sparse checkout does not include the test suite.
+if exist(tests_dir, "dir")
+    path_strings{end + 1} = tests_dir;
+end
+path_saved = add_save_path(path_strings, package_name);
 
 fprintf("\nThe package is ready to use.\n");
 fprintf("\nYou may now try ""help bds"" for information on the usage of the package.\n");
-fprintf("\nYou may also run ""testbds"" to test the package on a few examples.\n");
+if exist(tests_dir, "dir")
+    fprintf("\nYou may also run ""testbds"" to test the package on a few examples.\n");
+end
 
 if ~path_saved  % `add_save_path` failed to save the path.
     add_path_string = sprintf("addpath(""%s"");", src_dir);

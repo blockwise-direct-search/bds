@@ -1,0 +1,53 @@
+{
+  "status": "verified",
+  "seed": 2.0260828E+7,
+  "feature": "linearly_transformed_noisy_1e-2",
+  "n_problems": 133,
+  "n_runs": 5,
+  "selected_labels": [
+    "FG_old",
+    "FG_new"
+  ],
+  "all_variant_total_calls": [
+    1.137077E+6,
+    979045,
+    1.131532E+6,
+    1.133117E+6,
+    975100,
+    976545
+  ],
+  "new_solver_calls": 0,
+  "native_data_exact_match": true,
+  "native_curve_check_orders": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "source_files_unchanged": true,
+  "input_sha256": "4362803288046bf3690b1568a10f623256daa1b824e52856c3fb206019d1b9cf",
+  "control_manifest_sha256": "7bc0150125585f3c3fccf9d44140af6be8be5fd3f4890ad7c0082c1825863fca",
+  "benchmark_sha256": "857e493ebfd3de719f85e10372dc416dba16bcf7cea0ead3e6bc183bfc774c55",
+  "script_sha256": "5fb45a98af208e03956bc0cf293b38ecabbf04c92cbf7ab19f54820c3bb4e354",
+  "pdf_postprocessing": false,
+  "pdf_sha256": {
+    "history_all_tolerances_pdf": "b1e029ca33fcc4155e9e0987254d0c12b1435983e4e6ff1d55e6372c173cbe93",
+    "history_tau_1e_2_pdf": "7e081840400abebf55afeb44c84968a87b650d3d4b91d70ca5e0ff75539c5ff7",
+    "history_tau_1e_4_pdf": "75e22670c0b89091942b1f1c908c080947523c29daf31cd91647ac0a4c613938",
+    "output_all_tolerances_pdf": "47438ac410e3ae5d2f6374bca60c2c2e50f2fcb8f2defd5610d17a7bdb0193f0"
+  },
+  "native_result": {
+    "marker": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/time_stamp_20261102_213145.txt",
+    "time_stamp": "20261102_213145",
+    "test_log": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log",
+    "root": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145",
+    "data_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/data_for_loading.mat",
+    "options_user_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/options_user.mat",
+    "options_refined_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/options_refined.mat",
+    "report_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/report.txt",
+    "curves_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/curves.mat",
+    "profile_scores_file": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/test_log/profile_scores.mat",
+    "performance_history_pdf": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/perf_hist.pdf",
+    "performance_output_pdf": "/home/lhtian97/Work/bds_gradient_threshold_plots_20261102/seed1/linearly_transformed_noisy_1e-2/native/BDS_old_BDS_new_u_6_50_linearly_transformed_noisy_1e-2_20261102_213145/perf_out.pdf"
+  }
+}

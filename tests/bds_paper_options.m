@@ -21,6 +21,9 @@ function options = bds_paper_options(x0, experiment, configuration)
 %   Problem selection, features, random realizations, and dependency versions
 %   are separate benchmark inputs; see docs/PAPER_REPRODUCTION.md. This entry
 %   does not rerun or replace the accepted experiments.
+%   These option values are unchanged, but current production uses a newer
+%   final gradient stopping criterion than the frozen C04/C06 solver. Exact
+%   historical reproduction also requires the corresponding solver version.
 
 if ~ismember(experiment, {'internal', 'external'}) ...
         || ~ismember(configuration, {'mp', 'noacc', 'ds'}) ...

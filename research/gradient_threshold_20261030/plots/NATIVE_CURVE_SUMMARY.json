@@ -1,0 +1,437 @@
+{
+  "source": "Native pairwise OptiProfiler curves; targets recomputed per run.",
+  "records": [
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.08571428571428574
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.08571428571428574
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.8676691729323307,
+      "new_terminal_fraction": 0.8676691729323307,
+      "max_absolute_mean_curve_gap": 0.03609022556390984
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.593984962406015,
+      "new_terminal_fraction": 0.593984962406015,
+      "max_absolute_mean_curve_gap": 0.03609022556390962
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.9488721804511278,
+      "new_terminal_fraction": 0.9488721804511278,
+      "max_absolute_mean_curve_gap": 0.06315789473684197
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.8631578947368421,
+      "new_terminal_fraction": 0.8631578947368421,
+      "max_absolute_mean_curve_gap": 0.0631578947368423
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.912781954887218,
+      "new_terminal_fraction": 0.912781954887218,
+      "max_absolute_mean_curve_gap": 0.23458646616541357
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.6962406015037594,
+      "new_terminal_fraction": 0.6962406015037594,
+      "max_absolute_mean_curve_gap": 0.23458646616541362
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.9669172932330825,
+      "new_terminal_fraction": 0.9669172932330825,
+      "max_absolute_mean_curve_gap": 0.23909774436090203
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.9052631578947368,
+      "new_terminal_fraction": 0.9052631578947368,
+      "max_absolute_mean_curve_gap": 0.23909774436090225
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "plain",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "plain",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.33834586466165417
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "plain",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 0.9924812030075187,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.007518796992481258
+    },
+    {
+      "seed": 20260828.0,
+      "feature": "plain",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.9924812030075187,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.32330827067669166
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.09924812030075203
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 0.9984962406015038,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0015037593984962294
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.9984962406015038,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.09624060150375935
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.8436090225563909,
+      "new_terminal_fraction": 0.8436090225563909,
+      "max_absolute_mean_curve_gap": 0.04060150375939853
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.58796992481203,
+      "new_terminal_fraction": 0.58796992481203,
+      "max_absolute_mean_curve_gap": 0.04060150375939853
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.9488721804511275,
+      "new_terminal_fraction": 0.9488721804511275,
+      "max_absolute_mean_curve_gap": 0.06315789473684175
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "linearly_transformed_noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.8616541353383459,
+      "new_terminal_fraction": 0.8616541353383459,
+      "max_absolute_mean_curve_gap": 0.06315789473684208
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.8947368421052632,
+      "new_terminal_fraction": 0.8947368421052632,
+      "max_absolute_mean_curve_gap": 0.23458646616541368
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-2",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.6571428571428571,
+      "new_terminal_fraction": 0.6571428571428571,
+      "max_absolute_mean_curve_gap": 0.2345864661654135
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 0.9639097744360902,
+      "new_terminal_fraction": 0.9639097744360902,
+      "max_absolute_mean_curve_gap": 0.23609022556390968
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "noisy_1e-4",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.8962406015037592,
+      "new_terminal_fraction": 0.8962406015037592,
+      "max_absolute_mean_curve_gap": 0.23609022556390957
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "plain",
+      "tau": 0.01,
+      "kind": "hist",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.0
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "plain",
+      "tau": 0.01,
+      "kind": "out",
+      "old_terminal_fraction": 1.0,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.33834586466165417
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "plain",
+      "tau": 0.0001,
+      "kind": "hist",
+      "old_terminal_fraction": 0.9924812030075187,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.007518796992481258
+    },
+    {
+      "seed": 20261030.0,
+      "feature": "plain",
+      "tau": 0.0001,
+      "kind": "out",
+      "old_terminal_fraction": 0.9924812030075187,
+      "new_terminal_fraction": 1.0,
+      "max_absolute_mean_curve_gap": 0.32330827067669166
+    }
+  ]
+}

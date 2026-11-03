@@ -1,5 +1,21 @@
 # 论文配置与生产 BDS 的对应关系
 
+## 2026-11-02 的梯度停机变更
+
+当前 production 在启用梯度停机时采用新的最终双分支判据：窗口中所有 G
+小于 `grad_tol * min(1, G_ref)`，或所有 G 小于
+`1e-3 * grad_tol * max(1, G_ref)`。可靠参考值的初始化、窗口及参数默认值未改。
+`bds_paper_options` 返回的 option 字段和值不变，但其 external 配置会启用
+新判据，因此不能把当前入口与下述冻结 C04/C06 实现视为逐次完全相同。
+internal 配置关闭梯度停机，不受此判据修改影响。
+
+需要精确复现旧最终判据时，应使用相应冻结实现或修改前的
+`67014737eaa9dbe47f7eb40e6d6829e27617277e` 版本及原实验配置。
+本次没有重跑外部 solver 比较，也不更新论文或历史图。生产移植与验证记录见
+[实施记录](development/BDS_DUAL_GRADIENT_STOP_IMPLEMENTATION_20261102.md)。
+
+## 历史对齐基线
+
 本次对齐以 2026-10-19 核对的 C06 内部实验、C04 外部实验为依据。
 生产入口是 `src/bds.m`。默认使用 momentum → pattern（MP），retained
 productive-direction memory 已从 production 移除。其余默认参数不变。
@@ -10,17 +26,21 @@ productive-direction memory 已从 production 移除。其余默认参数不变�
 在仓库根目录的 MATLAB 会话中：
 
 ```matlab
-addpath('src', 'examples');
+addpath('src', 'tests');
 x0 = [-1.2; 1];
 fun = @(x) 100*(x(2)-x(1)^2)^2 + (1-x(1))^2;
 options = bds_paper_options(x0, 'internal', 'mp');
 [xopt, fopt, exitflag, output] = bds(fun, x0, options);
 ```
 
-`examples/bds_paper_options.m` 逐项列出实际 option 名称和值，不根据 solver
+`tests/bds_paper_options.m` 逐项列出实际 option 名称和值，不根据 solver
 显示名称猜测，也不依赖默认值补齐论文设置。已移除的 retained 两个字段不再传给
 production；冻结 MP 比较端仍显式使用原来的 false 和 `max(1,min(n,5))`，两侧 options
 分别保存。移除的是从未启用的机制，不改变论文 MP 的配置含义。
+
+该配置入口属于论文复现与验证工具，不是普通使用示例。若按 README 的精简方式
+只检出 src/ 和 examples/，需另外检出 tests/ 后再使用；普通 BDS 调用不需要此入口。
+旧实验快照中的 examples/bds_paper_options.m 保留其历史位置，不因当前目录调整而迁移。
 
 解析约定也需明确：`Algorithm='cbds'` / `'ds'` 确定分块及访问方式，因此不再同时传入
 互斥的 `num_blocks`、`batch_size` 或 `block_visiting_pattern`；冻结入口没有传
