@@ -90,5 +90,7 @@ tests/out
 tests/competitors/out
 
 .DS_Store
+# macOS AppleDouble metadata
+._*
 *.pdf
 *.png
