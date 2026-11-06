@@ -12,11 +12,9 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %   XOPT = BDS(FUN, X0, OPTIONS) performs the
 %   optimization using the specified options in OPTIONS.
 %
-%   By default, BDS tries momentum-direction extrapolation after regular block
-%   polling, followed by iteration-pattern search only if momentum accepts no
-%   improving point. Both searches use the same candidate step factors 1, 2,
-%   and 4. Productive-direction memory before polling is available but disabled
-%   by default. Each mechanism can be controlled independently below.
+%   By default, BDS uses rolling momentum extrapolation followed by pattern
+%   extrapolation only if momentum accepts no improving point. Both searches
+%   use distance multipliers 1, 2, and 4 and are independently optional.
 %
 %   OPTIONS should be a structure containing various fields that configure the algorithm's behavior.
 %   The most important options correspond directly to the parameters in Algorithm 2 of
@@ -137,128 +135,50 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               mode, which sets the seed based on the current time. This ensures
 %                               different random sequences across runs.
 %
-%   The following options are related to the acceleration steps.
-%   Both acceleration mechanisms operate on complete n-dimensional
-%   displacements produced by successful polling updates. They therefore
-%   support every valid block partition: changing num_blocks changes how the
-%   polling steps are formed, but does not change the representation used by
-%   the acceleration phases. In particular, num_blocks = 1 supplies the one
-%   block's successful displacement, while num_blocks = n may accumulate
-%   successful displacements from multiple one-direction blocks.
-%   Retained-direction acceleration has been removed. For legacy callers,
-%   use_productive_direction_memory=false (or empty) is accepted and discarded;
-%   true raises an error. productive_direction_memory_size is discarded with
-%   a deprecation warning. Neither legacy field creates any memory state.
+%   The following options are related to search acceleration.
+%   With cyclic coordinate blocks (the default), the first complete cycle
+%   performs one batch MP search. Later visits can perform rolling MP after
+%   polling improves the current base value. The direction sums the latest n
+%   polling/acceleration updates, replacing the oldest slot with the current
+%   polling update before the sum. Current acceleration enters future windows.
+%   Each block has its own momentum. The first cycle's momentum initializes
+%   the last block's vector; other vectors start at zero.
+%   Other bases, partitions or selection rules keep batch MP: one net
+%   displacement and one momentum vector after each selected batch.
+%   In both paths the direction norm must exceed max(StepTolerance), and
+%   evaluations must remain. See docs/BDS_ACCELERATION_OVERVIEW.md for dispatch.
+%   Function-value histories and optional stopping checks remain at batch
+%   boundaries (complete cycles for the default), not at every rolling visit.
+%   Any accepted acceleration point in the batch suppresses both extra checks.
 %
-%   use_iteration_pattern_step        Whether to perform an additional search after the regular
-%                                     polling phase of an iteration. The search is attempted only
-%                                     when the base point at the end of the iteration has a lower
-%                                     objective value than the base point at its beginning, the
-%                                     norm of the net displacement of the base point from the
-%                                     beginning to the end of the iteration is greater than the
-%                                     largest component of StepTolerance, and function evaluations
-%                                     remain available.
-%                                     If momentum extrapolation is also enabled, the pattern search
-%                                     is attempted only if momentum is unavailable or has accepted
-%                                     no improving point. A later rejection after an accepted
-%                                     momentum point does not trigger a pattern search.
-%                                     The pattern direction is the normalized net displacement of
-%                                     the base point during the current iteration. The pattern step
-%                                     length is the larger of the norm of this displacement and
-%                                     the largest component of StepTolerance. Starting from the
-%                                     current base point, the algorithm evaluates at most three
-%                                     candidate points, using step length factors 1, 2, and 4.
-%                                     The search stops at the first candidate whose objective value
-%                                     is not lower than the best value found in this phase, when
-%                                     the objective value is less than or equal to ftarget, or when
-%                                     the function evaluation budget is exhausted. If the search
-%                                     improves the objective function, the best candidate becomes
-%                                     the new base point.
-%                                     If use_momentum_extrapolation is enabled, the momentum vector
-%                                     is updated from the same normalized iteration displacement
-%                                     before this search, regardless of whether the pattern search
-%                                     improves the objective function.
-%                                     In summary, enabling this option adds a finite search along
-%                                     the normalized net displacement accumulated during the current
-%                                     iteration, after the regular BDS polling phase.
+%   use_iteration_pattern_step        Enable pattern extrapolation along the
+%                                     supplied window/batch direction. This
+%                                     option name is retained for compatibility.
+%                                     Pattern is attempted only if momentum is
+%                                     disabled, unavailable, or accepts no point.
 %                                     Default: true.
-%   use_momentum_extrapolation        Whether to maintain a momentum direction across iterations
-%                                     and to search along that direction when appropriate. After an
-%                                     iteration has produced a lower objective value at its ending
-%                                     base point than at its starting base point, has a net base
-%                                     point displacement greater than the largest component of
-%                                     StepTolerance, and still has available function evaluations,
-%                                     its normalized net displacement is incorporated into the
-%                                     momentum vector by the update
+%   use_momentum_extrapolation        Enable the momentum update and search:
 %                                     momentum = momentum_decay * momentum + ...
-%                                     (1 - momentum_decay) * pattern_direction.
-%                                     This momentum update is performed before the pattern and
-%                                     momentum candidate searches and is performed even when the
-%                                     pattern search subsequently finds an improving candidate. If
-%                                     the updated momentum vector has a norm greater than the
-%                                     largest component of StepTolerance, it is normalized to form
-%                                     the momentum direction. Otherwise, no momentum direction is
-%                                     available for the current iteration.
-%                                     Momentum candidates are evaluated first whenever a momentum
-%                                     direction is available. If this search accepts no improving
-%                                     point, use_iteration_pattern_step enables a pattern fallback
-%                                     while the target has not been reached and budget remains.
-%                                     In either case, candidate points use the pattern step length
-%                                     multiplied by the factors 1, 2, and 4. The search stops at the
-%                                     first candidate whose objective value is not lower than the
-%                                     current best value, when the objective value is less than or
-%                                     equal to ftarget, or when the function evaluation budget is
-%                                     exhausted. If a fallback pattern candidate is exactly the same
-%                                     point as the rejected momentum candidate, that search stops
-%                                     so that the objective function is not
-%                                     evaluated twice. If the momentum search improves the objective
-%                                     function, the best candidate becomes the new base point.
-%                                     In summary, this option updates a direction averaged over
-%                                     successful iteration displacements and may use that direction
-%                                     for the first additional search after regular polling.
-%                                     Default: true.
-%   momentum_decay                    Weight assigned to the previous momentum vector in the
-%                                     momentum update
-%                                     momentum = momentum_decay * momentum + ...
-%                                     (1 - momentum_decay) * pattern_direction.
-%                                     At the start of the solver, the momentum vector is initialized
-%                                     to the zero vector. After regular polling, the algorithm
-%                                     updates the momentum vector when the current iteration ends
-%                                     with a lower base point objective value than at its beginning,
-%                                     the norm of the net base point displacement exceeds the
-%                                     largest component of StepTolerance, and function evaluations
-%                                     remain available. The first iteration satisfying all three
-%                                     conditions produces a momentum vector directly from its
-%                                     pattern_direction. Each later iteration satisfying all three
-%                                     conditions combines its new pattern_direction with the
-%                                     momentum vector retained from earlier iterations. The momentum
-%                                     vector can therefore incorporate directions from multiple
-%                                     iterations after the second such update.
-%                                     Each momentum update first computes an updated momentum vector
-%                                     by multiplying the retained momentum vector by momentum_decay,
-%                                     multiplying the current pattern_direction by
-%                                     1 - momentum_decay, and adding the two resulting vectors. The
-%                                     algorithm then computes the norm of the updated momentum vector
-%                                     and creates momentum_direction by normalizing the updated vector
-%                                     only when its norm is greater than the largest component of
-%                                     StepTolerance. If the norm does not exceed the largest component
-%                                     of StepTolerance, the updated momentum vector is retained for
-%                                     later updates, but no momentum_direction is available for the
-%                                     current iteration and no search is performed along the momentum
-%                                     direction.
-%                                     The retained momentum vector summarizes normalized net
-%                                     displacement directions from earlier iterations.
-%                                     The coefficient momentum_decay multiplies the retained
-%                                     momentum vector, while 1 - momentum_decay multiplies the
-%                                     normalized net displacement of the current iteration. The
-%                                     momentum update is applied before normalization.
-%                                     With momentum_decay = 0, every update uses only the current
-%                                     pattern_direction and retains no information from earlier
-%                                     iterations. The parameter controls only the momentum update.
-%                                     It does not change the pattern step length or the candidate step
-%                                     factors.
+%                                     (1 - momentum_decay) * direction/norm(direction).
+%                                     The updated vector is saved even if no
+%                                     point is accepted. It is normalized for
+%                                     searching only when its norm exceeds
+%                                     max(StepTolerance). Default: true.
+%   momentum_decay                    Weight of the preceding momentum vector.
+%                                     Zero uses only the current direction.
 %                                     Default: 0.6.
 %
+%   Both searches use distances norm(direction) times 1, 2, and 4 from the
+%   same entry point. Each accepts strict improvements and stops at its first
+%   rejection, a reached target, or the evaluation budget. A later momentum
+%   rejection does not enable pattern if momentum accepted an earlier point.
+%   A pattern point identical to the rejected momentum point is not evaluated
+%   again. The acceleration switches remain independent.
+%   Retained-direction acceleration is not supported. For legacy callers,
+%   use_productive_direction_memory=false (or empty) is discarded; true raises
+%   an error. productive_direction_memory_size is discarded with a warning.
+%
+
 %   The following options are related to the termination criteria.
 %   MaxFunctionEvaluations                       Maximum number of function evaluations. A positive
 %                                                integer.
@@ -516,6 +436,10 @@ replacement_delay = options.replacement_delay;
 grouped_direction_indices = divide_direction_set(n, num_blocks, options);
 
 block_visiting_pattern = options.block_visiting_pattern;
+% Separate scheduling from acceleration: only the validated cyclic coordinate
+% configuration uses rolling MP. All other resolved configurations keep batch MP.
+rolling = initialize_rolling_acceleration(options, positive_direction_set, ...
+    grouped_direction_indices);
 
 % Resolve automatic initial steps only after get_direction_set has produced the final basis and the
 % directions have been assigned to blocks. For block i, get_auto_alpha_init supplies the coordinate
@@ -696,8 +620,8 @@ for iter = 1:maxit
     xbase_iteration_start = xbase;
     fbase_iteration_start = fbase;
 
-    % Record whether the post-poll acceleration phase accepts an update using
-    % that phase's own acceptance rule.
+    % Accumulate acceleration success over the whole batch/cycle. Rolling
+    % visits OR their results into this flag before the stopping checks.
     post_poll_acceleration_succeeded = false;
 
     % Define block_indices, a vector that specifies both the indices of the blocks
@@ -752,6 +676,10 @@ for iter = 1:maxit
         % i_real = block_indices(i) is the real index of the block to be visited. For example,
         % if block_indices is [1 3 2] and i = 2, then we are going to visit the 3rd block.
         i_real = block_indices(i);
+        if rolling.enabled
+            point_before_poll = xbase;
+            value_before_poll = fbase;
+        end
 
         % Get indices of directions in the i_real-th block.
         direction_indices = grouped_direction_indices{i_real};
@@ -870,6 +798,33 @@ for iter = 1:maxit
             xbase = sub_xopt;
             fbase = sub_fopt;
         end
+        if rolling.enabled
+            acceleration_state = struct( ...
+                'xbase', xbase, 'fbase', fbase, 'nf', nf, ...
+                'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
+                'momentum', rolling.momentum(:, i_real));
+            [acceleration_state, rolling, acceleration_succeeded, ...
+                target_reached, acceleration_attempted] = run_rolling_acceleration( ...
+                fun, acceleration_state, acceleration_configuration, rolling, ...
+                i_real, num_visited_blocks, point_before_poll, value_before_poll);
+            xbase = acceleration_state.xbase;
+            fbase = acceleration_state.fbase;
+            nf = acceleration_state.nf;
+            fhist = acceleration_state.fhist;
+            xhist = acceleration_state.xhist;
+            invalid_points = acceleration_state.invalid_points;
+            % This flag covers the ENTIRE cycle, not only its last visit.
+            post_poll_acceleration_succeeded = ...
+                post_poll_acceleration_succeeded || acceleration_succeeded;
+            if acceleration_attempted && fbase < fopt
+                fopt = fbase;
+                xopt = xbase;
+            end
+            if target_reached
+                terminate = true;
+                exitflag = get_exitflag("FTARGET_REACHED");
+            end
+        end
     end
 
     % Record the step sizes after the current iteration if output_alpha_hist is true.
@@ -917,7 +872,9 @@ for iter = 1:maxit
     % The entry guard stays here to keep the phase ordering visible;
     % post_poll_acceleration_state packs exactly the mutable state the phase
     % may update.
-    if ~terminate && fbase < fbase_iteration_start ...
+    % Rolling uses this phase only to bootstrap the first cycle. Keeping the
+    % batch boundary also preserves iteration limits and output history units.
+    if (~rolling.enabled || iter == 1) && ~terminate && fbase < fbase_iteration_start ...
             && norm(iteration_step) > acceleration_configuration.step_floor ...
             && nf < MaxFunctionEvaluations ...
             && (options.use_iteration_pattern_step || options.use_momentum_extrapolation)
@@ -936,6 +893,9 @@ for iter = 1:maxit
         xhist = post_poll_acceleration_state.xhist;
         invalid_points = post_poll_acceleration_state.invalid_points;
         momentum = post_poll_acceleration_state.momentum;
+        if rolling.enabled
+            rolling = finish_rolling_bootstrap(rolling, post_poll_acceleration_state);
+        end
         if post_poll_target_reached
             terminate = true;
             exitflag = get_exitflag("FTARGET_REACHED");

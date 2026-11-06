@@ -48,16 +48,21 @@ and robust handling of invalid function evaluations.
 
 ### Acceleration
 
-The public `bds` solver enables two post-poll acceleration mechanisms
-by default, in momentum → pattern order:
+The public `bds` solver enables two acceleration mechanisms
+by default, in momentum → pattern order. Cyclic coordinate blocks use a rolling
+window; other configurations retain acceleration after each selected batch:
 
-- **Momentum extrapolation** combines successful iteration displacements across
-  iterations and searches along the resulting momentum direction.
-- **Iteration-pattern search** extrapolates along the net successful displacement
-  of the current iteration if momentum is disabled, unavailable, or accepts no
-  improving point.
+- **Momentum extrapolation** combines normalized window directions in a separate
+  momentum vector for each block in the rolling configuration.
+- **Pattern extrapolation** searches along the window direction if momentum is
+  disabled, unavailable, or accepts no improving point.
 
-The two post-poll mechanisms use the same candidate step factors `1`, `2`, and
+The first complete cycle initializes rolling history through a batch MP search.
+Optional stopping still checks at complete-cycle boundaries. The supported
+configuration and compatibility rules are described in
+[the acceleration overview](docs/BDS_ACCELERATION_OVERVIEW.md).
+
+The two mechanisms use the same candidate step factors `1`, `2`, and
 `4` from the same entry base point. Once momentum accepts any point, a later
 rejection does not trigger pattern fallback. The default
 function-evaluation budget is `500*length(x0)`, and the default noiseless
@@ -69,7 +74,7 @@ The default accelerated solver can be called directly:
 [xopt, fopt] = bds(fun, x0);
 ```
 
-Retained productive-direction memory has been removed. The two post-poll
+Retained productive-direction memory has been removed. The two acceleration
 switches remain enabled by default; there is no public order selector.
 For legacy callers, `use_productive_direction_memory=false` (or empty) is
 accepted without creating memory state; `true` raises a clear error.

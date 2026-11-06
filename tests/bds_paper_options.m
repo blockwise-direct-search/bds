@@ -24,6 +24,8 @@ function options = bds_paper_options(x0, experiment, configuration)
 %   These option values are unchanged, but current production uses a newer
 %   final gradient stopping criterion than the frozen C04/C06 solver. Exact
 %   historical reproduction also requires the corresponding solver version.
+%   Production cyclic coordinate MP now uses rolling windows (C15 P0A1).
+%   These options alone do not reproduce the historical batch-MP figures.
 
 if ~ismember(experiment, {'internal', 'external'}) ...
         || ~ismember(configuration, {'mp', 'noacc', 'ds'}) ...

@@ -1,5 +1,7 @@
 function summary = verify_bds_mp_manifest(manifest_file, result_directory, mode)
 %VERIFY_BDS_MP_MANIFEST Compare all 133 frozen S2MPJ problems, without exclusions.
+%   Historical batch-MP verifier, not the rolling production acceptance gate.
+%   Use verify_bds_rolling_reference(..., 'manifest') for C15 P0A1.
 %
 %   MODE='full' checks both internal and external paper settings on the whole
 %   manifest. MODE='smoke' checks the first two entries only. S2MPJ_LOAD must

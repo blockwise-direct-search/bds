@@ -1,5 +1,7 @@
 function summary = verify_bds_mp_reference(result_directory, mode, gradient_stop_enabled)
 %VERIFY_BDS_MP_REFERENCE Strict MP verification with iseqiv and complete traces.
+%   Historical batch-MP verifier. For rolling production use
+%   verify_bds_rolling_reference with the frozen C15 P0A1 source instead.
 %
 %   SUMMARY = VERIFY_BDS_MP_REFERENCE(RESULT_DIRECTORY, MODE) requires BDS,
 %   C03_BDS_MP (the unmodified frozen reference), and BDS_PAPER_OPTIONS on the

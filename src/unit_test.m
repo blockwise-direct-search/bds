@@ -10,6 +10,67 @@ tests = functiontests(localfunctions);
 
 end
 
+function rolling_acceleration_test(testcase)
+% Explicit window/state checks, independent of the frozen full-solver oracle.
+options = struct('num_blocks',2,'batch_size',2,'replacement_delay',0, ...
+    'block_visiting_pattern','sorted','use_iteration_pattern_step',true, ...
+    'use_momentum_extrapolation',true);
+blocks = {[1,2],[3,4]};
+rolling = initialize_rolling_acceleration(options,eye(2),blocks);
+verifyTrue(testcase,rolling.enabled);
+alternate=options;alternate.block_visiting_pattern='random';
+r=initialize_rolling_acceleration(alternate,eye(2),blocks);
+verifyFalse(testcase,r.enabled);
+r=initialize_rolling_acceleration(options,[1,.2;0,1],blocks);
+verifyFalse(testcase,r.enabled);
+alternate=options;alternate.use_iteration_pattern_step=false;
+alternate.use_momentum_extrapolation=false;
+r=initialize_rolling_acceleration(alternate,eye(2),blocks);
+verifyFalse(testcase,r.enabled);
+configuration=struct('use_iteration_pattern_step',true, ...
+    'use_momentum_extrapolation',true,'momentum_decay',.6,'step_floor',1e-6, ...
+    'MaxFunctionEvaluations',100,'ftarget',-Inf,'output_xhist',true);
+state=struct('xbase',[1;0],'fbase',-1,'nf',2,'fhist',[0,-1], ...
+    'xhist',[0,1;0,0],'invalid_points',zeros(2,0),'momentum',zeros(2,1));
+fun=@(x)-sum(x);
+[state,rolling,success,~,attempted]=run_rolling_acceleration( ...
+    fun,state,configuration,rolling,1,1,[0;0],0);
+verifyFalse(testcase,attempted);verifyFalse(testcase,success);
+verifyEqual(testcase,rolling.steps,[1,0;0,0]);
+state.xbase=[1;2];state.fbase=-3;
+[state,rolling,~,~,attempted]=run_rolling_acceleration( ...
+    fun,state,configuration,rolling,2,2,[1;0],-1);
+verifyFalse(testcase,attempted);
+[state,~,~]=run_post_poll_acceleration_phase(fun,state,configuration,[1;2]);
+rolling=finish_rolling_bootstrap(rolling,state);
+verifyEqual(testcase,rolling.steps,[1,4;0,10]);
+verifyEqual(testcase,rolling.momentum(:,1),zeros(2,1));
+verifyEqual(testcase,rolling.momentum(:,2),state.momentum);
+for switches=1:3
+    config=configuration;
+    config.use_iteration_pattern_step=logical(bitget(switches,1));
+    config.use_momentum_extrapolation=logical(bitget(switches,2));
+    entry=state;entry.xbase=[6;10];entry.fbase=-16;
+    entry.momentum=rolling.momentum(:,1);
+    expected=run_post_poll_acceleration_phase(fun,entry,config,[5;10]);
+    [actual,r,success,~,attempted]=run_rolling_acceleration( ...
+        fun,entry,config,rolling,1,3,[5;10],-15);
+    verifyTrue(testcase,attempted);verifyTrue(testcase,success);
+    verifyEqual(testcase,actual,expected);
+    verifyEqual(testcase,r.steps(:,1),[1;0]+actual.xbase-[6;10]);
+    verifyEqual(testcase,r.steps(:,2),rolling.steps(:,2));
+    verifyEqual(testcase,r.momentum(:,2),rolling.momentum(:,2));
+    verifyEqual(testcase,r.momentum(:,1),actual.momentum);
+end
+% Previous window improvements alone must not trigger another acceleration.
+entry=state;
+[actual,r,success,~,attempted]=run_rolling_acceleration( ...
+    fun,entry,configuration,rolling,1,3,entry.xbase,entry.fbase);
+verifyFalse(testcase,attempted);verifyFalse(testcase,success);
+verifyEqual(testcase,actual,entry);
+verifyEqual(testcase,r.momentum,rolling.momentum);
+end
+
 function run_post_poll_acceleration_phase_test(testcase)
 %RUN_POST_POLL_ACCELERATION_PHASE_TEST tests the file private/run_post_poll_acceleration_phase.m.
 % Explicit expected points and states check MP branches without a reference solver.

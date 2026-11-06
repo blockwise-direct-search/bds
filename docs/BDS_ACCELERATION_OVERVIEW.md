@@ -1,85 +1,92 @@
 # BDS acceleration overview
 
-## Production role
+## Production behavior
 
-The public solver `src/bds.m` includes three acceleration mechanisms:
+The default cyclic coordinate configuration uses the green C15 rolling MP
+strategy (candidate 1, P0A1). Momentum is attempted before pattern; pattern is
+a fallback only if momentum is unavailable or accepts no point. Both switches
+remain independently optional. The extrapolation distances use factors 1, 2,
+and 4, with the existing acceptance, duplicate suppression and evaluation rules.
 
-- productive-direction memory before regular block polling;
-- iteration-pattern search after a productive polling iteration;
-- momentum-direction extrapolation after polling.
+Rolling is selected from resolved options: coordinate basis, one signed pair
+per block in coordinate order, all blocks selected in sorted order, and zero
+replacement delay. Other bases, partitions, random selection and simultaneous
+batch updates retain the pre-integration batch MP behavior. Configuration
+dispatch is deterministic and consumes no random numbers.
 
-All three mechanisms are enabled by default and can be controlled independently
-with `use_productive_direction_memory`, `use_iteration_pattern_step`, and
-`use_momentum_extrapolation`. The default function-evaluation budget is
-`500*n`, the default noiseless expansion factor is `2.0`, the productive
-memory holds at most `min(n, 5)` entries, and `momentum_decay` is `0.6`.
+## Window and momentum state
 
-The two post-poll searches share candidate step factors `1`, `2`, and `4`.
-Pattern candidates are considered first. Momentum candidates are considered
-only when the pattern search does not improve the incumbent, or when the
-pattern mechanism is disabled. An exactly repeated rejected candidate is not
-evaluated twice.
+Each cyclic visit overwrites its ring slot with the current polling update.
+Summing the slots in their existing order gives the direction used for this
+visit. Previous acceleration updates are included in the other slots.
+Acceleration from the current visit is added afterward, for future windows.
+There is no requirement for two successful polling directions.
 
-The detailed public option contracts are part of `help bds`. The phase helper
-headers in `src/private` document their complete state and configuration
-interfaces.
+Each block owns a momentum vector. From the second cycle onward, an improving
+polling visit can update that block's momentum and run MP if the window norm
+exceeds the step tolerance and evaluations remain.
 
-## Independent references
+The first cycle is a bootstrap, not an acceleration-free cycle: after polling
+all blocks, the original batch MP is attempted along the cycle's net polling
+update. Its momentum initializes the last block's momentum; its accepted
+update enters that block's history slot. The other momenta remain zero.
+This ordering matches the frozen C15 experiment, including floating-point
+summation and addition order.
 
-Two test-only reference layers prevent production BDS from being compared with
-itself:
+## Stopping and compatibility
 
-- `bds_without_acceleration_reference.m` freezes production BDS immediately
-  before acceleration was promoted. Its changing option/default/validation and
-  automatic-step dependencies are frozen under reference-specific names.
-- `lean_evolved_bds.m` is the independent all-acceleration-on CBDS reference.
-  Its budget is aligned with the production `500*n` default.
-- `lean_evolved_bds_original.m` preserves the pre-termination-change lean
-  mechanism, while `tests/competitors/lean_evolved_bds_legacy.m` preserves the older
-  pre-momentum-duplicate behavior needed by focused regression tests.
+Function-value history is recorded once per batch, which is once per complete
+cycle for the default. Any accepted acceleration point anywhere in the batch
+suppresses both additional termination checks for that batch. The original
+function and gradient window parameters, reference selection, two-branch
+thresholds, iteration limits and output history units are unchanged.
+Budget, target and step-size exits retain their existing positions.
 
-The historical `bds_tmp.m` was removed rather than used as an oracle because its
-objective handling, helper calls, and stopping behavior were already stale.
+Gradient data remain separate from the acceleration window. This integration
+does not replace the existing gradient estimator or broaden its validity
+conditions. The full-cycle coordinate experiment is not a validation of
+arbitrary sampled-block gradient estimates.
 
-## Behavioral contracts
+The interface names use_iteration_pattern_step and the existing output fields
+are retained. No new user-facing tuning parameter is introduced. Disabling
+both accelerations retains the existing non-accelerated path.
 
-With all acceleration switches disabled, production `bds` must match the
-frozen non-accelerated reference under the same explicit algorithm parameters.
-The permanent checker covers CBDS, PBDS, RBDS, PADS, and DS.
+## Private interfaces
 
-With all acceleration switches enabled, production `bds` must match
-`lean_evolved_bds` for both the default algorithm entry and explicit
-`Algorithm = "cbds"`.
+- inner_direct_search performs the existing block polling and returns its
+  unchanged result interface.
+- initialize_rolling_acceleration selects the supported path and allocates
+  the ring slots and per-block momentum.
+- run_rolling_acceleration records one poll, constructs its window direction
+  and calls run_post_poll_acceleration_phase.
+- finish_rolling_bootstrap transfers the first cycle's MP state.
+- run_post_poll_acceleration_phase remains the common, unchanged numerical
+  MP kernel; its historical argument iteration_step now also accepts a rolling
+  window direction.
+- eval_fun, estimate_gradient and get_gradient_error_bound remain in use.
 
-Strict equivalence covers the function-evaluation sequence and count, returned
-point and value, stopping behavior, exit flag, histories, seeded random
-behavior, and the output fields checked by `iseqiv`.
+The outer batch scheduler is retained for compatibility with block-selection
+rules, output histories and stopping intervals. Rolling does not require
+exposing a second iteration index in a mathematical description.
 
 ## Verification
 
-Run the permanent acceleration gate from the repository root:
+Run run_bds_regression_suite from tests for maintained unit and compatibility
+checks, including the explicit rolling-state tests in src/unit_test.m.
 
-```matlab
-addpath("tests");
-verify_bds_acceleration
-```
+verify_bds_rolling_reference adds independent full-trace comparisons:
+fixtures covers C15 MP with all four stopping combinations, small budgets,
+targets, noise and evaluation failures, plus legacy non-default configurations.
+manifest covers all 133 frozen S2MPJ problems with all four stopping modes,
+using the paper's 500*N budget. These are correctness checks, not new tuning
+experiments.
 
-It covers 2610 cases:
+Frozen source files and private dependencies live in an isolated verification
+directory, never in production src. The C15 oracle is selected as p0a1; only
+its experimental instrumentation field is excluded from output comparison.
+The legacy oracle is the unmodified production commit a70ab1cb. Older cyclic
+MP oracles do not describe the new default and must not be relabeled as rolling
+oracles.
 
-- 1350 acceleration-off cases across five BDS algorithms;
-- 630 acceleration-on cases using the default entry;
-- 630 acceleration-on cases using explicit CBDS.
-
-Changes affecting stopping or evaluation accounting must also run:
-
-```matlab
-verify_gradient_stopping_threshold
-verify_gradient_stop_no_extra_evaluations
-verify_gradient_estimate_validity
-verify_function_value_reference
-verify_bds_momentum_duplicate
-verify_bds_auto_alpha_init
-```
-
-The full acceptance gate additionally includes `src/unit_test.m`, Code
-Analyzer, installation/path/help smoke testing, and local/server hash equality.
+See docs/development/BDS_ROLLING_MP_IMPLEMENTATION_20261106.md for the execution
+record, source provenance and actual acceptance results.

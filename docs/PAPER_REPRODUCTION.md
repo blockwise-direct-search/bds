@@ -1,5 +1,16 @@
 # 论文配置与生产 BDS 的对应关系
 
+## 2026-11-06 的 rolling 加速移植
+
+默认 cyclic 坐标配置已移植 C15 candidate 1（绿色 P0A1）加速，完整周期末的
+函数值及梯度停机保持 C15 行为。非默认配置保留原有 batch MP。
+`bds_paper_options` 的参数未变，但当前默认入口不再等同于历史 C04/C06
+整轮 MP。旧图精确复现仍须使用对应冻结版本，不能只复制 options。
+新的逐步等价验证入口是 `verify_bds_rolling_reference`，历史
+`verify_bds_mp_reference` 和 `verify_bds_mp_manifest` 不作为 rolling 验收依据。
+本次不修改论文、不重算性能图。范围与验收记录见
+[rolling 移植记录](development/BDS_ROLLING_MP_IMPLEMENTATION_20261106.md)。
+
 ## 2026-11-02 的梯度停机变更
 
 当前 production 在启用梯度停机时采用新的最终双分支判据：窗口中所有 G
