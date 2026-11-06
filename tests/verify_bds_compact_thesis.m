@@ -147,13 +147,21 @@ function prepare_observers(p,q,folder)
 p=replace_once(p,'= bds(', '= bds_observed(');
 p=replace_once(p,'num_visited_blocks = 0;', ...
     sprintf('num_visited_blocks = 0;\nverification_trace=struct(''before'',{{}},''after'',{{}});'));
-p=replace_once(p,'i_real = block_indices(i);',sprintf(['i_real = block_indices(i);\n' ...
-    'verification_trace.before{end+1}=compact_snapshot(i_real,nf,xbase,fbase,alpha_all,vertcat(grouped_direction_indices{:}));']));
 record='verification_trace.after{end+1}=compact_snapshot(i_real,nf,xbase,fbase,alpha_all,vertcat(grouped_direction_indices{:}));';
-p=replace_once(p,sprintf('\n        if sub_output.terminate\n'),sprintf('\n        if sub_output.terminate\n%s\n',record));
-p=replace_once(p,'if all(alpha_all < alpha_tol)',sprintf('if all(alpha_all < alpha_tol)\n%s',record));
-p=replace_once(p,sprintf('        if rolling.enabled\n            acceleration_state'), ...
-    sprintf('        %s\n        if rolling.enabled\n            acceleration_state',record));
+if contains(p,'i_real = batch.indices(batch.position);')
+    anchor='i_real = batch.indices(batch.position);';
+    p=replace_once(p,anchor,sprintf('%s\nverification_trace.before{end+1}=compact_snapshot(i_real,nf,xbase,fbase,alpha_all,vertcat(grouped_direction_indices{:}));',anchor));
+    anchor='    % Continue immediately with the next block unless this batch is complete';
+    p=replace_once(p,anchor,sprintf('    %s\n%s',record,anchor));
+else
+    % Keep support for the frozen pre-refactor implementation.
+    p=replace_once(p,'i_real = block_indices(i);',sprintf(['i_real = block_indices(i);\n' ...
+        'verification_trace.before{end+1}=compact_snapshot(i_real,nf,xbase,fbase,alpha_all,vertcat(grouped_direction_indices{:}));']));
+    p=replace_once(p,sprintf('\n        if sub_output.terminate\n'),sprintf('\n        if sub_output.terminate\n%s\n',record));
+    p=replace_once(p,'if all(alpha_all < alpha_tol)',sprintf('if all(alpha_all < alpha_tol)\n%s',record));
+    p=replace_once(p,sprintf('        if rolling.enabled\n            acceleration_state'), ...
+        sprintf('        %s\n        if rolling.enabled\n            acceleration_state',record));
+end
 p=replace_once(p,'output.funcCount = nf;',sprintf('output.funcCount = nf;\noutput.verification_trace=verification_trace;'));
 q=replace_once(q,'=bds_compact_thesis(', '=compact_observed(');
 q=replace_once(q,'for iter=1:maxfun',sprintf('verification_trace=struct(''before'',{{}},''after'',{{}});\nfor iter=1:maxfun'));

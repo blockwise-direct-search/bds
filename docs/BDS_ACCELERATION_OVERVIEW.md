@@ -65,9 +65,24 @@ both accelerations retains the existing non-accelerated path.
   window direction.
 - eval_fun, estimate_gradient and get_gradient_error_bound remain in use.
 
-The outer batch scheduler is retained for compatibility with block-selection
-rules, output histories and stopping intervals. Rolling does not require
-exposing a second iteration index in a mathematical description.
+## Execution loop
+
+The main execution loop visits exactly one block per pass. The explicit
+`batch` context contains its index, current position, selected block indices
+and starting point/value. The three stages in `bds.m` are BEGIN BATCH,
+VISIT ONE BLOCK and FINALIZE BATCH; there is no nested batch/visit loop.
+
+Sequential visits commit the current point immediately and the default
+configuration considers rolling MP before visiting the next block. Parallel
+visits share the batch starting point and defer its update to finalization.
+The word parallel describes this shared-base rule; this refactor does not
+introduce actual worker-level parallel execution.
+
+Block selection and its random draws occur only at batch initialization.
+Histories, legacy batch MP and additional stopping remain at the same batch
+boundaries, including existing partial-batch termination behavior. Public
+history indices still count batches. Structural refactoring does not turn
+the function or gradient stopping criteria into per-visit tests.
 
 ## Verification
 

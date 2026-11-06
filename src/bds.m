@@ -385,10 +385,8 @@ n = length(x0);
 options = set_options(options, n, x0);
 
 MaxFunctionEvaluations = options.MaxFunctionEvaluations;
-% Set the maximum number of iterations.
-% Each iteration will use at least one function evaluation.
-% Setting maxit to MaxFunctionEvaluations
-% will ensure that MaxFunctionEvaluations is exhausted before maxit is reached.
+% Preserve the public batch/iteration limit. A nonempty batch uses at least
+% one evaluation, so the evaluation budget bounds the number of batches.
 maxit = MaxFunctionEvaluations;
 
 ftarget = options.ftarget;
@@ -614,219 +612,206 @@ num_visited_blocks = 0;
 fopt_all = nan(1, num_blocks);
 xopt_all = nan(n, num_blocks);
 
-for iter = 1:maxit
+% One pass of the execution loop visits one block. The batch context retains
+% scheduling and history units; it is not a second execution loop. In parallel
+% mode, batch.xbase/fbase stay shared until the batch-finalization section.
+batch = struct('index', 1, 'position', 1);
+while batch.index <= maxit && ~terminate
 
-    % Save the base point and function value at the beginning of the iteration.
-    xbase_iteration_start = xbase;
-    fbase_iteration_start = fbase;
+    % BEGIN BATCH: select blocks and initialize batch-level records once.
+    if batch.position == 1
+        % Save the base point and function value at the beginning of the iteration.
+        batch.xbase = xbase;
+        batch.fbase = fbase;
 
-    % Accumulate acceleration success over the whole batch/cycle. Rolling
-    % visits OR their results into this flag before the stopping checks.
-    post_poll_acceleration_succeeded = false;
+        % Accumulate acceleration success over the whole batch/cycle. Rolling
+        % visits OR their results into this flag before the stopping checks.
+        post_poll_acceleration_succeeded = false;
 
-    % Define block_indices, a vector that specifies both the indices of the blocks
-    % and the order in which they will be visited during the current iteration.
-    % The length of block_indices is equal to batch_size.
-    % These blocks should not have been visited in the previous replacement_delay
-    % iterations. Each completed iteration contributes batch_size entries to block_hist.
-    unavailable_block_indices = unique(block_hist(max(1, (iter - replacement_delay - 1) * batch_size + 1) : ...
-                                (iter-1) * batch_size), 'stable');
-    available_block_indices = setdiff(1:num_blocks, unavailable_block_indices);
+        % Define batch.indices, a vector that specifies both the indices of the blocks
+        % and the order in which they will be visited during the current iteration.
+        % The length of batch.indices is equal to batch_size.
+        % These blocks should not have been visited in the previous replacement_delay
+        % iterations. Each completed iteration contributes batch_size entries to block_hist.
+        unavailable_block_indices = unique(block_hist(max(1, (batch.index - replacement_delay - 1) * batch_size + 1) : ...
+                                    (batch.index-1) * batch_size), 'stable');
+        available_block_indices = setdiff(1:num_blocks, unavailable_block_indices);
 
-    % Select batch_size blocks randomly from the available blocks. The selected blocks
-    % will be visited in this iteration.
-    block_indices = available_block_indices(random_stream.randperm(length(available_block_indices), ...
-                    batch_size));
+        % Select batch_size blocks randomly from the available blocks. The selected blocks
+        % will be visited in this iteration.
+        batch.indices = available_block_indices(random_stream.randperm(length(available_block_indices), ...
+                        batch_size));
 
-    % Compute the direction selection probability matrix.
-    direction_selection_probability_matrix = get_direction_probability_matrix(n, batch_size, ...
-                                            grouped_direction_indices, available_block_indices);
-    grad_info.direction_selection_probability_matrix = direction_selection_probability_matrix;
+        % Compute the direction selection probability matrix.
+        direction_selection_probability_matrix = get_direction_probability_matrix(n, batch_size, ...
+                                                grouped_direction_indices, available_block_indices);
+        grad_info.direction_selection_probability_matrix = direction_selection_probability_matrix;
 
-    % Choose the block indices based on options.block_visiting_pattern.
-    if strcmpi(block_visiting_pattern, "sorted")
-        block_indices = sort(block_indices);
+        % Choose the block indices based on options.block_visiting_pattern.
+        if strcmpi(block_visiting_pattern, "sorted")
+            batch.indices = sort(batch.indices);
+        end
+
+        % Initialize sampled_direction_indices_per_batch as a cell array of length batch_size to store
+        % the indices of directions evaluated in each batch during the current iteration.
+        % Initialize function_values_per_batch as a cell array of length batch_size to store the
+        % function values computed in each batch during the current iteration.
+        % Initialize batch_gradient_available as a logical array of length batch_size, indicating whether
+        % each block qualifies for gradient estimation based on specific criteria.
+        sampled_direction_indices_per_batch = cell(1, batch_size);
+        function_values_per_batch = cell(1, batch_size);
+        % When the following two conditions are satisfied, the block is eligible for gradient estimation:
+        % (1) sufficient decrease criterion is not met.
+        % (2) all directions in the block have been evaluated.
+        % The second condition is essential because gradient estimation requires complete
+        % directional information. Without it, we might incorrectly attempt gradient estimation
+        % when function evaluation budget is 1 and this only function evaluation does not achieve
+        % sufficient decrease. This situation is particularly critical when num_blocks = 1.
+        batch_gradient_available = false(1, batch_size);
     end
 
-    % Initialize sampled_direction_indices_per_batch as a cell array of length batch_size to store
-    % the indices of directions evaluated in each batch during the current iteration.
-    % Initialize function_values_per_batch as a cell array of length batch_size to store the
-    % function values computed in each batch during the current iteration.
-    % Initialize batch_gradient_available as a logical array of length batch_size, indicating whether
-    % each block qualifies for gradient estimation based on specific criteria.
-    sampled_direction_indices_per_batch = cell(1, batch_size);
-    function_values_per_batch = cell(1, batch_size);
-    % When the following two conditions are satisfied, the block is eligible for gradient estimation:
-    % (1) sufficient decrease criterion is not met.
-    % (2) all directions in the block have been evaluated.
-    % The second condition is essential because gradient estimation requires complete
-    % directional information. Without it, we might incorrectly attempt gradient estimation
-    % when function evaluation budget is 1 and this only function evaluation does not achieve
-    % sufficient decrease. This situation is particularly critical when num_blocks = 1.
-    batch_gradient_available = false(1, batch_size);
-
-    for i = 1:length(block_indices)
-
-        % The pre-poll phase may already reach ftarget or exhaust the function-evaluation
-        % budget. In either case, stop visiting regular-polling blocks in this iteration.
-        if terminate || nf >= MaxFunctionEvaluations
-            break;
-        end
-
-        % i_real = block_indices(i) is the real index of the block to be visited. For example,
-        % if block_indices is [1 3 2] and i = 2, then we are going to visit the 3rd block.
-        i_real = block_indices(i);
-        if rolling.enabled
-            point_before_poll = xbase;
-            value_before_poll = fbase;
-        end
-
-        % Get indices of directions in the i_real-th block.
-        direction_indices = grouped_direction_indices{i_real};
-
-        % Store the step size for the i_real-th block in grad_info.
-        % - step_size_per_block(i_real): indexed by global block index i_real because it maintains
-        %   step sizes for ALL num_blocks blocks (used later for gradient error bound calculation
-        %   which needs the complete picture of all block step sizes).
-        % - step_size_per_batch(i): indexed by batch index i because it only stores step sizes for
-        %   the batch_size blocks visited in the current iteration. The batch index i directly
-        %   corresponds to the position in sampled_direction_indices_per_batch and
-        %   function_values_per_batch, which are also batch_size in length (used for gradient
-        %   estimation which only needs information about blocks visited in this iteration).
-        grad_info.step_size_per_block(i_real) = alpha_all(i_real);
-        grad_info.step_size_per_batch(i) = alpha_all(i_real);
-        grad_info.fbase_per_batch(i) = fbase;
-
-        % Set the options for the direct search within the i_real-th block.
-        suboptions = struct( ...
-            'FunctionEvaluations_exhausted', nf, ...
-            'MaxFunctionEvaluations', MaxFunctionEvaluations - nf, ...
-            'ftarget', ftarget, ...
-            'forcing_function', forcing_function, ...
-            'reduction_factor', reduction_factor, ...
-            'polling_inner', polling_inner, ...
-            'cycling_inner', cycling_inner, ...
-            'iprint', iprint, ...
-            'i_real', i_real);
-
-        % Perform the direct search within the i_real-th block.
-        [sub_xopt, sub_fopt, sub_exitflag, sub_output] = inner_direct_search(fun, xbase,...
-            fbase, D(:, direction_indices), direction_indices,...
-            alpha_all(i_real), suboptions);
-
-        % Record the index of the block visited.
-        num_visited_blocks = num_visited_blocks + 1;
-        block_hist(num_visited_blocks) = i_real;
-
-        % Record the points visited by inner_direct_search if output_xhist is true.
-        if output_xhist
-            xhist(:, (nf+1):(nf+sub_output.nf)) = sub_output.xhist;
-            invalid_points = [invalid_points, sub_output.invalid_points];
-        end
-
-        % Record the function values calculated by inner_direct_search,
-        fhist((nf+1):(nf+sub_output.nf)) = sub_output.fhist;
-
-        % Update the number of function evaluations.
-        nf = nf+sub_output.nf;
-
-        % Store the indices of directions (with respect to the full direction set) that were
-        % evaluated in the current batch during this iteration.
-        % Note that The reason that we use sampled_direction_indices_per_batch{i} instead of
-        % sampled_direction_indices_per_batch{i_real} is similar to that for
-        % grad_info.step_size_per_batch(i) explained above.
-        % We use direction_indices(1:sub_output.nf) instead of sub_output.direction_indices
-        % because inner_direct_search might not evaluate all directions in the block and may cycle
-        % through the directions multiple times. direction_indices(1:sub_output.nf) accurately
-        % captures the specific directions evaluated during this invocation of inner_direct_search.
-        sampled_direction_indices_per_batch{i} = direction_indices(1:sub_output.nf);
-
-        % Store function values for the current batch.
-        function_values_per_batch{i} = sub_output.fhist;
-
-        % Record whether all directions in the i_real-th block have been evaluated and
-        % sufficient decrease is not achieved.
-        batch_gradient_available(i) = (sub_output.nf == length(direction_indices)) && ...
-        ~sub_output.sufficient_decrease;
-
-        % Record the best function value and point encountered in the i_real-th block.
-        fopt_all(i_real) = sub_fopt;
-        xopt_all(:, i_real) = sub_xopt;
-
-        % Retrieve the direction indices of the i_real-th block, which represent the order of the
-        % directions in the i_real-th block when we perform the direct search in this block next time.
-        grouped_direction_indices{i_real} = sub_output.direction_indices;
-
-        % Whether to update xbase and fbase. xbase serves as the "base point" for the computation
-        % in the next block, meaning that reduction will be calculated with respect to xbase, as
-        % shown above. The condition must be checked before updating alpha_all(i_real) because the
-        % sufficient decrease is calculated based on the current step size.
-        % eval_fun maps a failed NaN evaluation to Inf for algorithmic comparisons.
-        % Keep the NaN clauses as defensive safeguards in case that policy changes.
-        update_base = (sub_fopt + reduction_factor(1) * forcing_function(alpha_all(i_real)) < fbase) ...
-                    || (isnan(fbase) && ~isnan(sub_fopt));
-        % Update the step size alpha_all according to the reduction achieved.
-        if (sub_fopt + reduction_factor(3) * forcing_function(alpha_all(i_real)) < fbase) ...
-                || (isnan(fbase) && ~isnan(sub_fopt))
-            alpha_all(i_real) = expand * alpha_all(i_real);
-        elseif (sub_fopt + reduction_factor(2) * forcing_function(alpha_all(i_real)) >= fbase) ...
-                || (isnan(sub_fopt) && ~isnan(fbase))
-            alpha_all(i_real) = shrink * alpha_all(i_real);
-        end
-
-        % Terminate the computations if sub_output.terminate is true, which means that
-        % inner_direct_search decides that the algorithm should be terminated for some reason
-        % indicated by sub_exitflag.
-        if sub_output.terminate
-            terminate = true;
-            exitflag = sub_exitflag;
-            break;
-        end
-
-        % Terminate the computations if the step size for each block falls below their
-        % corresponding thresholds.
-        if all(alpha_all < alpha_tol)
-            terminate = true;
-            exitflag = get_exitflag("SMALL_ALPHA");
-            break;
-        end
-
-        % If the block_visiting_pattern is not "parallel", then we will update xbase and fbase after
-        % finishing the direct search in the i_real-th block. For "parallel", we will update xbase
-        % and fbase after one iteration of the outer loop.
-        if ~strcmpi(block_visiting_pattern, "parallel") && update_base
-            xbase = sub_xopt;
-            fbase = sub_fopt;
-        end
-        if rolling.enabled
-            acceleration_state = struct( ...
-                'xbase', xbase, 'fbase', fbase, 'nf', nf, ...
-                'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
-                'momentum', rolling.momentum(:, i_real));
-            [acceleration_state, rolling, acceleration_succeeded, ...
-                target_reached, acceleration_attempted] = run_rolling_acceleration( ...
-                fun, acceleration_state, acceleration_configuration, rolling, ...
-                i_real, num_visited_blocks, point_before_poll, value_before_poll);
-            xbase = acceleration_state.xbase;
-            fbase = acceleration_state.fbase;
-            nf = acceleration_state.nf;
-            fhist = acceleration_state.fhist;
-            xhist = acceleration_state.xhist;
-            invalid_points = acceleration_state.invalid_points;
-            % This flag covers the ENTIRE cycle, not only its last visit.
-            post_poll_acceleration_succeeded = ...
-                post_poll_acceleration_succeeded || acceleration_succeeded;
-            if acceleration_attempted && fbase < fopt
-                fopt = fbase;
-                xopt = xbase;
-            end
-            if target_reached
-                terminate = true;
-                exitflag = get_exitflag("FTARGET_REACHED");
-            end
-        end
+    % VISIT ONE BLOCK: reuse the private polling interface, then rolling MP.
+    % The batch position and the global block index are distinct.
+    i_real = batch.indices(batch.position);
+    if rolling.enabled
+        point_before_poll = xbase;
+        value_before_poll = fbase;
     end
 
+    % Get indices of directions in the i_real-th block.
+    direction_indices = grouped_direction_indices{i_real};
+
+    % Gradient data use global block indices for persistent steps and batch
+    % positions for samples gathered within this batch. In parallel mode,
+    % xbase/fbase still equal the saved batch base for every visit.
+    grad_info.step_size_per_block(i_real) = alpha_all(i_real);
+    grad_info.step_size_per_batch(batch.position) = alpha_all(i_real);
+    grad_info.fbase_per_batch(batch.position) = fbase;
+
+    % Set the options for the direct search within the i_real-th block.
+    suboptions = struct( ...
+        'FunctionEvaluations_exhausted', nf, ...
+        'MaxFunctionEvaluations', MaxFunctionEvaluations - nf, ...
+        'ftarget', ftarget, ...
+        'forcing_function', forcing_function, ...
+        'reduction_factor', reduction_factor, ...
+        'polling_inner', polling_inner, ...
+        'cycling_inner', cycling_inner, ...
+        'iprint', iprint, ...
+        'i_real', i_real);
+
+    % Perform the direct search within the i_real-th block.
+    [sub_xopt, sub_fopt, sub_exitflag, sub_output] = inner_direct_search(fun, xbase,...
+        fbase, D(:, direction_indices), direction_indices,...
+        alpha_all(i_real), suboptions);
+
+    % Record the index of the block visited.
+    num_visited_blocks = num_visited_blocks + 1;
+    block_hist(num_visited_blocks) = i_real;
+
+    % Record the points visited by inner_direct_search if output_xhist is true.
+    if output_xhist
+        xhist(:, (nf+1):(nf+sub_output.nf)) = sub_output.xhist;
+        invalid_points = [invalid_points, sub_output.invalid_points];
+    end
+
+    % Record the function values calculated by inner_direct_search,
+    fhist((nf+1):(nf+sub_output.nf)) = sub_output.fhist;
+
+    % Update the number of function evaluations.
+    nf = nf+sub_output.nf;
+
+    % Record evaluated directions in their pre-cycling order. Unvisited
+    % batch positions remain empty and cannot certify a complete gradient.
+    sampled_direction_indices_per_batch{batch.position} = direction_indices(1:sub_output.nf);
+
+    % Store function values for the current batch.
+    function_values_per_batch{batch.position} = sub_output.fhist;
+
+    % Record whether all directions in the i_real-th block have been evaluated and
+    % sufficient decrease is not achieved.
+    batch_gradient_available(batch.position) = (sub_output.nf == length(direction_indices)) && ...
+    ~sub_output.sufficient_decrease;
+
+    % Record the best function value and point encountered in the i_real-th block.
+    fopt_all(i_real) = sub_fopt;
+    xopt_all(:, i_real) = sub_xopt;
+
+    % Retrieve the direction indices of the i_real-th block, which represent the order of the
+    % directions in the i_real-th block when we perform the direct search in this block next time.
+    grouped_direction_indices{i_real} = sub_output.direction_indices;
+
+    % Whether to update xbase and fbase. xbase serves as the "base point" for the computation
+    % in the next block, meaning that reduction will be calculated with respect to xbase, as
+    % shown above. The condition must be checked before updating alpha_all(i_real) because the
+    % sufficient decrease is calculated based on the current step size.
+    % eval_fun maps a failed NaN evaluation to Inf for algorithmic comparisons.
+    % Keep the NaN clauses as defensive safeguards in case that policy changes.
+    update_base = (sub_fopt + reduction_factor(1) * forcing_function(alpha_all(i_real)) < fbase) ...
+                || (isnan(fbase) && ~isnan(sub_fopt));
+    % Update the step size alpha_all according to the reduction achieved.
+    if (sub_fopt + reduction_factor(3) * forcing_function(alpha_all(i_real)) < fbase) ...
+            || (isnan(fbase) && ~isnan(sub_fopt))
+        alpha_all(i_real) = expand * alpha_all(i_real);
+    elseif (sub_fopt + reduction_factor(2) * forcing_function(alpha_all(i_real)) >= fbase) ...
+            || (isnan(sub_fopt) && ~isnan(fbase))
+        alpha_all(i_real) = shrink * alpha_all(i_real);
+    end
+
+    % Terminate the computations if sub_output.terminate is true, which means that
+    % inner_direct_search decides that the algorithm should be terminated for some reason
+    % indicated by sub_exitflag.
+    if sub_output.terminate
+        terminate = true;
+        exitflag = sub_exitflag;
+    elseif all(alpha_all < alpha_tol)
+        terminate = true;
+        exitflag = get_exitflag("SMALL_ALPHA");
+    end
+
+    % Sequential visits commit the base now. Parallel visits defer that
+    % commit to batch finalization. Terminal visits retain the existing exit
+    % order: update steps and best-point records, but do not commit a new base.
+    if ~terminate && ~strcmpi(block_visiting_pattern, "parallel") && update_base
+        xbase = sub_xopt;
+        fbase = sub_fopt;
+    end
+    if ~terminate && rolling.enabled
+        acceleration_state = struct( ...
+            'xbase', xbase, 'fbase', fbase, 'nf', nf, ...
+            'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
+            'momentum', rolling.momentum(:, i_real));
+        [acceleration_state, rolling, acceleration_succeeded, ...
+            target_reached, acceleration_attempted] = run_rolling_acceleration( ...
+            fun, acceleration_state, acceleration_configuration, rolling, ...
+            i_real, num_visited_blocks, point_before_poll, value_before_poll);
+        xbase = acceleration_state.xbase;
+        fbase = acceleration_state.fbase;
+        nf = acceleration_state.nf;
+        fhist = acceleration_state.fhist;
+        xhist = acceleration_state.xhist;
+        invalid_points = acceleration_state.invalid_points;
+        % This flag covers the ENTIRE cycle, not only its last visit.
+        post_poll_acceleration_succeeded = ...
+            post_poll_acceleration_succeeded || acceleration_succeeded;
+        if acceleration_attempted && fbase < fopt
+            fopt = fbase;
+            xopt = xbase;
+        end
+        if target_reached
+            terminate = true;
+            exitflag = get_exitflag("FTARGET_REACHED");
+        end
+    end
+    % Continue immediately with the next block unless this batch is complete
+    % or an exit was reached. Even a partial terminal batch is finalized once.
+    if ~terminate && nf < MaxFunctionEvaluations ...
+            && batch.position < numel(batch.indices)
+        batch.position = batch.position + 1;
+        continue;
+    end
+
+    % FINALIZE BATCH: shared-base commit, batch MP, histories and stopping.
     % Record the step sizes after the current iteration if output_alpha_hist is true.
     % The first column stores the initial step sizes. Each subsequent column stores
     % the step sizes carried into the next iteration.
@@ -851,8 +836,8 @@ for iter = 1:maxit
     % See eval_fun.m for details.
     % assert(fopt == min(fhist));
 
-    % For "parallel", we will update xbase and fbase only after one iteration of the outer loop.
-    % During the inner loop, every block will share the same xbase and fbase.
+    % Parallel visits used the same saved batch base. Commit the shared
+    % result here, including when the budget ended a partially visited batch.
     if strcmpi(block_visiting_pattern, "parallel")
         % Update xbase and fbase. xbase serves as the "base point" for the computation in the
         % next block, meaning that reduction will be calculated with respect to xbase, as shown above.
@@ -866,7 +851,7 @@ for iter = 1:maxit
 
     % Summarize the net displacement accumulated since the beginning of the
     % current iteration for the post-poll acceleration phase.
-    iteration_step = xbase - xbase_iteration_start;
+    iteration_step = xbase - batch.xbase;
 
     % Post-poll acceleration phase: try momentum, then a pattern step if needed.
     % The entry guard stays here to keep the phase ordering visible;
@@ -874,7 +859,7 @@ for iter = 1:maxit
     % may update.
     % Rolling uses this phase only to bootstrap the first cycle. Keeping the
     % batch boundary also preserves iteration limits and output history units.
-    if (~rolling.enabled || iter == 1) && ~terminate && fbase < fbase_iteration_start ...
+    if (~rolling.enabled || batch.index == 1) && ~terminate && fbase < batch.fbase ...
             && norm(iteration_step) > acceleration_configuration.step_floor ...
             && nf < MaxFunctionEvaluations ...
             && (options.use_iteration_pattern_step || options.use_momentum_extrapolation)
@@ -948,12 +933,9 @@ for iter = 1:maxit
             % sufficient decrease, we record the estimated gradient. Thus, xbase should be recorded
             % not xopt even if xopt is better than xbase.
             grad_xhist = [grad_xhist, xbase];
-            % Record the iteration number at which the gradient was estimated.
-            % The gradient is estimated during iteration iter when none of the selected
-            % blocks achieve sufficient decrease. Although the estimation is based on xbase
-            % (which may have been updated in a previous iteration), the estimation itself
-            % occurs in the current iteration iter.
-            grad_iter = [grad_iter, iter];
+            % Preserve the public gradient-history index: it counts batches,
+            % not passes through the block-visit loop.
+            grad_iter = [grad_iter, batch.index];
 
             if use_estimated_gradient_stop
 
@@ -1042,11 +1024,9 @@ for iter = 1:maxit
         exitflag = get_exitflag("SMALL_ALPHA");
     end
 
-    % Terminate the computations if terminate is true.
-    if terminate
-        break;
-    end
-
+    % Start a new batch only after completing all boundary operations.
+    batch.index = batch.index + 1;
+    batch.position = 1;
 end
 
 % Record the number of function evaluations in output.
