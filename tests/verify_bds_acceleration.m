@@ -1,13 +1,13 @@
 function verify_bds_acceleration()
 %VERIFY_BDS_ACCELERATION Strict checks for the production BDS accelerations.
 %
-% All five non-accelerated algorithms retain their frozen-reference checks.
+% All four serial non-accelerated algorithms retain their frozen-reference checks.
 % The former lean/PM all-on comparison is preserved as a historical test in
 % tests/archive/legacy_pm/verify_bds_acceleration_pm.m. It is not an MP oracle.
 % Run verify_bds_mp_reference separately with the frozen MP on the path.
-% Gradient stopping is disabled in both historical-oracle comparisons: its
-% final criterion changed independently of acceleration. The enabled rule is
-% covered by verify_gradient_stopping_threshold and the candidate regression.
+% Both additional criteria are disabled in the frozen polling comparison.
+% Their general complete-visit timing is covered by verify_serial_stopping;
+% thresholds and reference rules retain separate focused regression checks.
 
 path_tests = fileparts(mfilename('fullpath'));
 path_root = fileparts(path_tests);
@@ -25,8 +25,8 @@ verify_acceleration_off_matches_reference(oldfolder);
 
 fprintf('\nProduction BDS acceleration verification passed.\n');
 fprintf(['  off: bds.m == bds_without_acceleration_reference.m for ', ...
-    'Algorithm=cbds/pbds/rbds/pads/ds, with gradient stopping disabled.\n']);
-fprintf('  MP-on: separate frozen-reference verification is required.\n');
+    'Algorithm=cbds/pbds/rbds/ds, with both additional stops disabled.\n']);
+fprintf('  On: general-window checks are in verify_serial_refactor.\n');
 
 end
 
@@ -35,7 +35,7 @@ function verify_acceleration_off_matches_reference(oldfolder)
 dims = 1:5;
 ir_values = 0:17;
 seed_values = [12345, 23456, 34567];
-algorithms = ["cbds", "pbds", "rbds", "pads", "ds"];
+algorithms = ["cbds", "pbds", "rbds", "ds"];
 
 for algorithm = algorithms
     label = sprintf('acceleration-off-Algorithm-%s', algorithm);
@@ -96,6 +96,7 @@ if ~isfield(options, 'expand')
     options.expand = 1.8;
 end
 options.use_estimated_gradient_stop = false;
+options.use_function_value_stop = false;
 [xopt, fopt, exitflag, output] = ...
     bds_without_acceleration_reference(fun, x0, options);
 
@@ -103,9 +104,7 @@ end
 
 function [xopt, fopt, exitflag, output] = run_production_bds_no_acceleration(fun, x0, options)
 
-options.use_productive_direction_memory = false;
-options.use_iteration_pattern_step = false;
-options.use_momentum_extrapolation = false;
+options.use_search_acceleration = false;
 
 % Production BDS uses expand=2.0, whereas the frozen non-accelerated reference
 % uses 1.8. The all-off comparison fixes the historical reference value because
@@ -116,6 +115,7 @@ if ~isfield(options, 'expand')
 end
 
 options.use_estimated_gradient_stop = false;
+options.use_function_value_stop = false;
 [xopt, fopt, exitflag, output] = bds(fun, x0, options);
 
 end

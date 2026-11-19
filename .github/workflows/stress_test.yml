@@ -24,7 +24,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         matlab: [R2024b, latest]
         with_optim_toolbox: [no]
-        solver: [cbds, pbds, rbds, pads, ds]
+        solver: [cbds, pbds, rbds, ds]
         tough: [true, false]
 
     steps:

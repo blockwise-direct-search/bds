@@ -39,9 +39,7 @@ switch constant_name
         constant_value = true;
     case "grad_reference_finite_difference_error_tol"
         % For theta=shrink=0.5 this reproduces the historical raw threshold 0.1.
-        constant_value = 1/30;
-    case "block_visiting_pattern"
-        constant_value = "sorted";
+        constant_value = 1 / 30;
     case "seed"
         constant_value = "shuffle";
     case "alpha_init"
@@ -50,14 +48,8 @@ switch constant_name
         constant_value = 2.0;
     case "shrink"
         constant_value = 0.5;
-    case "expand_noisy"
-        constant_value = 1.5;
-    case "shrink_noisy"
-        constant_value = 0.5;
-    case "is_noisy"
-        constant_value = false;
     case "forcing_function"
-        constant_value = @(alpha) alpha^2;
+        constant_value = @(alpha) alpha ^ 2;
     case "reduction_factor"
         constant_value = [0, eps, eps];
     case "polling_inner"
@@ -76,11 +68,7 @@ switch constant_name
         constant_value = 0;
     case "debug_flag"
         constant_value = false;
-    case "momentum_decay"
-        constant_value = 0.6;
-    case "use_iteration_pattern_step"
-        constant_value = true;
-    case "use_momentum_extrapolation"
+    case "use_search_acceleration"
         constant_value = true;
     otherwise
         error("Unknown BDS constant name '%s'.", constant_name);

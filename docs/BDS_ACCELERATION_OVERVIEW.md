@@ -1,107 +1,89 @@
-# BDS acceleration overview
+# Serial acceleration and additional termination
 
-## Production behavior
+The production entry is `src/bds.m`. One main `for` advances one actual block
+visit. `Algorithm` accepts `'cyclic'` or `'cbds'`, `'permuted'` or `'pbds'`,
+`'random'` or `'rbds'` for randomized visits,
+and `'ds'` uses one block. `Algorithm` is the sole visit-order option. Cyclic
+visits advance directly through block indices; permuted visits draw a new
+permutation each round. Randomized visits preserve the established default
+exclusion of the preceding `num_blocks-1` visited blocks.
 
-The default cyclic coordinate configuration uses the green C15 rolling MP
-strategy (candidate 1, P0A1). Momentum is attempted before pattern; pattern is
-a fallback only if momentum is unavailable or accepts no point. Both switches
-remain independently optional. The extrapolation distances use factors 1, 2,
-and 4, with the existing acceptance, duplicate suppression and evaluation rules.
+## Complete visits and acceleration
 
-Rolling is selected from resolved options: coordinate basis, one signed pair
-per block in coordinate order, all blocks selected in sorted order, and zero
-replacement delay. Other bases, partitions, random selection and simultaneous
-batch updates retain the pre-integration batch MP behavior. Configuration
-dispatch is deterministic and consumes no random numbers.
+A complete visit covers every block at least once in consecutive visits.
+At a given iteration, acceleration uses the latest start that still covers
+every block. For extra stopping checks, BDS fixes a start and takes the first
+end that covers every block. Both answers come from
+`src/private/complete_visit_status.m` using the last visit index of each block.
+At each visit BDS also saves the point from which it polled that block.
 
-## Window and momentum state
+The pattern displacement is the current point after polling minus that saved
+start point. It includes accepted accelerations from earlier visits. There is
+no special first-cycle path. Every acceleration requires a complete window,
+strict improvement in the current poll, and a pattern norm larger than the
+largest step tolerance.
 
-Each cyclic visit overwrites its ring slot with the current polling update.
-Summing the slots in their existing order gives the direction used for this
-visit. Previous acceleration updates are included in the other slots.
-Acceleration from the current visit is added afterward, for future windows.
-There is no requirement for two successful polling directions.
+Each block stores a momentum vector. The candidate combines the saved vector
+and the normalized pattern direction with weights 0.6 and 0.4. Search along the
+candidate momentum first when its norm exceeds the largest step tolerance.
+Then search along the pattern from the same point after polling. Keep the
+best point found, and save the candidate momentum if the pattern search
+accepts a point. The two searches are organized in `src/private/accelerate.m`. The public option `use_search_acceleration` controls both
+searches together.
 
-Each block owns a momentum vector. From the second cycle onward, an improving
-polling visit can update that block's momentum and run MP if the window norm
-exceeds the step tolerance and evaluations remain.
+`src/private/extrapolate.m` considers factors 1, 2, 4, 8 and 16 from the same
+base. It stops at the first rejection, target or budget. Identical points
+reuse evaluations within the two searches. The history records new evaluations
+only. Function values are compared through `eval_fun`.
 
-The first cycle is a bootstrap, not an acceleration-free cycle: after polling
-all blocks, the original batch MP is attempted along the cycle's net polling
-update. Its momentum initializes the last block's momentum; its accepted
-update enters that block's history slot. The other momenta remain zero.
-This ordering matches the frozen C15 experiment, including floating-point
-summation and addition order.
+## Additional termination checks
 
-## Stopping and compatibility
+The first interval starts at iteration zero. As soon as every block has been
+visited, BDS checks the applicable criteria and starts the next interval at
+the following iteration. The main function records whether any
+acceleration was accepted in the interval. Both additional criteria require
+that none was accepted. Function values are recorded at every complete-visit
+end, including intervals that are ineligible for stopping.
 
-Function-value history is recorded once per batch, which is once per complete
-cycle for the default. Any accepted acceleration point anywhere in the batch
-suppresses both additional termination checks for that batch. The original
-function and gradient window parameters, reference selection, two-branch
-thresholds, iteration limits and output history units are unchanged.
-Budget, target and step-size exits retain their existing positions.
+`src/private/check_additional_termination.m` contains both criteria, their
+windows and the gradient reference selection. It performs no objective calls.
+The software continues to accept `func_window_size=1`; the paper's discussion
+of window sizes at least two is not a validation constraint.
 
-Gradient data remain separate from the acceleration window. This integration
-does not replace the existing gradient estimator or broaden its validity
-conditions. The full-cycle coordinate experiment is not a validation of
-arbitrary sampled-block gradient estimates.
+A gradient estimate requires complete finite paired samples at a common
+unchanged point and their actual polling steps before shrinkage. No polling
+point can have been accepted during that complete visit. Repeated visits replace
+the samples of the same block. A general basis uses the transposed linear solve.
+The reference error and consistency checks apply only when choosing the fixed
+reference. Only subsequent available estimates enter the gradient window.
 
-The interface names use_iteration_pattern_step and the existing output fields
-are retained. No new user-facing tuning parameter is introduced. Disabling
-both accelerations retains the existing non-accelerated path.
+Budget and target checks occur during evaluations; basic step stopping is
+checked after block updates. An additional criterion completed on the last
+allowed evaluation can supply the exit reason without another evaluation.
+A reached target retains priority. `grad_iter` counts completed visits, whereas
+`alpha_hist` records each round for cyclic/permuted visits and each visit for
+randomized/direct search, with a terminating partial round included.
 
-## Private interfaces
+## Verification and historical results
 
-- inner_direct_search performs the existing block polling and returns its
-  unchanged result interface.
-- initialize_rolling_acceleration selects the supported path and allocates
-  the ring slots and per-block momentum.
-- run_rolling_acceleration records one poll, constructs its window direction
-  and calls run_post_poll_acceleration_phase.
-- finish_rolling_bootstrap transfers the first cycle's MP state.
-- run_post_poll_acceleration_phase remains the common, unchanged numerical
-  MP kernel; its historical argument iteration_step now also accepts a rolling
-  window direction.
-- eval_fun, estimate_gradient and get_gradient_error_bound remain in use.
+Run `tests/run_bds_regression_suite.m`. The independent `serial_reference.m`
+scans full histories backwards and does not call production helpers. The suite
+checks general windows, the first-window gate, invalid evaluations, input and
+output conventions, stopping references and windows, and frozen serial polling
+with acceleration disabled. The dated refactoring record reports actual runs.
 
-## Execution loop
+## Step sizes and reference documentation
 
-The main execution loop visits exactly one block per pass. The explicit
-`batch` context contains its index, current position, selected block indices
-and starting point/value. The three stages in `bds.m` are BEGIN BATCH,
-VISIT ONE BLOCK and FINALIZE BATCH; there is no nested batch/visit loop.
+The expansion default is 2 for every objective; explicit `expand` values remain
+supported. `alpha_init='auto'` implements only the
+standard coordinate blocks, using `max(abs(x0(i)),StepTolerance(i))` for a nonzero
+coordinate and `max(1,StepTolerance(i))` for a zero coordinate. Other bases or
+partitions require explicit numeric initial steps. General-basis polling and
+gradient recovery remain available with such steps.
 
-Sequential visits commit the current point immediately and the default
-configuration considers rolling MP before visiting the next block. Parallel
-visits share the batch starting point and defer its update to finalization.
-The word parallel describes this shared-base rule; this refactor does not
-introduce actual worker-level parallel execution.
-
-Block selection and its random draws occur only at batch initialization.
-Histories, legacy batch MP and additional stopping remain at the same batch
-boundaries, including existing partial-batch termination behavior. Public
-history indices still count batches. Structural refactoring does not turn
-the function or gradient stopping criteria into per-visit tests.
-
-## Verification
-
-Run run_bds_regression_suite from tests for maintained unit and compatibility
-checks, including the explicit rolling-state tests in src/unit_test.m.
-
-verify_bds_rolling_reference adds independent full-trace comparisons:
-fixtures covers C15 MP with all four stopping combinations, small budgets,
-targets, noise and evaluation failures, plus legacy non-default configurations.
-manifest covers all 133 frozen S2MPJ problems with all four stopping modes,
-using the paper's 500*N budget. These are correctness checks, not new tuning
-experiments.
-
-Frozen source files and private dependencies live in an isolated verification
-directory, never in production src. The C15 oracle is selected as p0a1; only
-its experimental instrumentation field is excluded from output comparison.
-The legacy oracle is the unmodified production commit a70ab1cb. Older cyclic
-MP oracles do not describe the new default and must not be relabeled as rolling
-oracles.
-
-See docs/development/BDS_ROLLING_MP_IMPLEMENTATION_20261106.md for the execution
-record, source provenance and actual acceptance results.
+The detailed gradient-reference calibration is documented in
+`src/private/check_additional_termination.m`. `lipschitz_constant` estimates a
+problem property: a Hessian Lipschitz constant. Without verification of the
+constant and the required assumptions, its error expression is heuristic.
+The public help retains option meanings and defaults and refers to this helper
+for the derivation. Initialization in `bds.m` is organized into named sections.

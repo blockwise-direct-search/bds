@@ -47,9 +47,8 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
         [results.reference, reference_calls] = run_reference(objective, options);
 
         production_options = options;
-        production_options.use_productive_direction_memory = false;
-        production_options.use_iteration_pattern_step = false;
-        production_options.use_momentum_extrapolation = false;
+
+        production_options.use_search_acceleration = false;
         [results.production, production_calls] = ...
             run_production(objective, production_options);
 
@@ -66,9 +65,8 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
         [reference_result, reference_calls] = run_reference(@(x) 7, options);
 
         production_options = options;
-        production_options.use_productive_direction_memory = false;
-        production_options.use_iteration_pattern_step = false;
-        production_options.use_momentum_extrapolation = false;
+
+        production_options.use_search_acceleration = false;
         [production_result, production_calls] = ...
             run_production(@(x) 7, production_options);
 
@@ -85,8 +83,7 @@ fprintf('GRADIENT_ESTIMATE_VALIDITY_OK\n');
 
     function verify_acceleration_on_zero_gradient_stop()
         options = gradient_stop_options();
-        options.use_iteration_pattern_step = true;
-        options.use_momentum_extrapolation = true;
+        options.use_search_acceleration = true;
         options.use_gradient_reference_consistency = true;
         options.grad_reference_finite_difference_error_tol = 1/30;
         [production_result, production_calls] = ...

@@ -34,8 +34,8 @@ other material from the repository or prevent you from checking it out later.
 setup
 ```
 
-If setup succeeds, BDS is ready to use. Run `help bds` for the complete solver
-interface and option contracts.
+If setup succeeds, BDS is ready to use. Run `help bds` for the solver interface and
+[the acceleration overview](docs/BDS_ACCELERATION_OVERVIEW.md) for execution rules.
 
 MATLAB R2017a and earlier are not supported. If you encounter a problem, please
 [open an issue](https://github.com/blockwise-direct-search/bds/issues).
@@ -48,25 +48,23 @@ and robust handling of invalid function evaluations.
 
 ### Acceleration
 
-The public `bds` solver enables two acceleration mechanisms
-by default, in momentum → pattern order. Cyclic coordinate blocks use a rolling
-window; other configurations retain acceleration after each selected batch:
+The public `bds` solver enables search acceleration by default through
+`options.use_search_acceleration`. A complete visit consists of consecutive visits covering
+every block at least once. Acceleration uses the one ending now with the latest
+possible start. After a successful current poll and a sufficiently long pattern
+displacement, both searches start from the point after polling. BDS keeps the
+best point found and saves the current block's candidate momentum if the
+pattern search improves on the polling point.
 
-- **Momentum extrapolation** combines normalized window directions in a separate
-  momentum vector for each block in the rolling configuration.
-- **Pattern extrapolation** searches along the window direction if momentum is
-  disabled, unavailable, or accepts no improving point.
+Additional termination checks take the earliest end from each fixed start.
+See [the acceleration overview](docs/BDS_ACCELERATION_OVERVIEW.md) for the
+conditions and the code implementing them.
 
-The first complete cycle initializes rolling history through a batch MP search.
-Optional stopping still checks at complete-cycle boundaries. The supported
-configuration and compatibility rules are described in
-[the acceleration overview](docs/BDS_ACCELERATION_OVERVIEW.md).
-
-The two mechanisms use the same candidate step factors `1`, `2`, and
-`4` from the same entry base point. Once momentum accepts any point, a later
-rejection does not trigger pattern fallback. The default
-function-evaluation budget is `500*length(x0)`, and the default noiseless
-expansion factor is `2.0`.
+Each direction considers the distance multipliers `1`, `2`, `4`, `8`, and
+`16` in order and stops at its first rejection. Identical points share one
+evaluation within the two searches. The default
+function-evaluation budget is `500*length(x0)`, and the default
+expansion factor is `2.0` for every objective. Explicit factors remain supported.
 
 The default accelerated solver can be called directly:
 
@@ -74,20 +72,10 @@ The default accelerated solver can be called directly:
 [xopt, fopt] = bds(fun, x0);
 ```
 
-Retained productive-direction memory has been removed. The two acceleration
-switches remain enabled by default; there is no public order selector.
-For legacy callers, `use_productive_direction_memory=false` (or empty) is
-accepted without creating memory state; `true` raises a clear error.
-`productive_direction_memory_size` is ignored with a deprecation warning.
-Historical retained experiments require their original solver version; frozen
-experimental results are not changed by this removal.
-
-Each mechanism can be controlled independently. To recover the non-accelerated
-polling behavior under otherwise identical explicit options, disable both:
+To disable search acceleration, set the public switch to false.
 
 ```matlab
-options.use_iteration_pattern_step = false;
-options.use_momentum_extrapolation = false;
+options.use_search_acceleration = false;
 [xopt, fopt] = bds(fun, x0, options);
 ```
 
@@ -126,8 +114,17 @@ options.alpha_init = 'auto';
 [xopt, fopt] = bds(fun, x0, options);
 ```
 
-An explicit scalar or vector `alpha_init` remains available when the polling
-scale is known in advance.
+This initialization is currently supported only for standard coordinate blocks,
+with one pair of coordinate directions per block. General bases and grouped
+blocks require an explicit positive scalar or vector `alpha_init`.
+
+Set `Algorithm` to `'cyclic'` (`'cbds'`), `'permuted'` (`'pbds'`), or
+`'random'` (`'rbds'`) to use one block per dimension, or to `'ds'` to use
+one block. If you also supply `num_blocks`, the counts must agree. To use a
+custom number of cyclic blocks, supply `num_blocks` and omit `Algorithm`. Cyclic
+visits advance through the blocks, permuted visits draw a new permutation each
+round, and randomized visits retain the previous default exclusion of the most
+recent `num_blocks-1` blocks.
 
 ### Invalid function evaluations
 

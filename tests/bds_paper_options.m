@@ -43,14 +43,12 @@ options.StepTolerance = 1e-6;
 options.ftarget = -Inf;
 options.expand = 2;
 options.shrink = 0.5;
-options.is_noisy = false;
+
 options.forcing_function = @(alpha) alpha^2;
 options.reduction_factor = [0, eps, eps];
 options.polling_inner = 'opportunistic';
 options.cycling_inner = 1;
-options.use_iteration_pattern_step = strcmp(configuration, 'mp');
-options.use_momentum_extrapolation = strcmp(configuration, 'mp');
-options.momentum_decay = 0.6;
+options.use_search_acceleration = strcmp(configuration, 'mp');
 options.use_function_value_stop = true;
 options.func_window_size = 20;
 options.func_tol = 1e-6;

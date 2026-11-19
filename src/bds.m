@@ -1,34 +1,31 @@
 function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %BDS solves unconstrained optimization problems without
-%using derivatives by blockwise direct search methods with optional
-%acceleration steps.
+%using derivatives by serial blockwise direct search with optional
+%momentum and pattern extrapolation.
 %
 %   BDS supports MATLAB R2017b or later.
 %
 %   XOPT = BDS(FUN, X0) returns an approximate minimizer
 %   XOPT of the function FUN, starting the calculations at X0. FUN must
-%   accept a vector input X and return a scalar.
+%   accept a vector input X with the same orientation as X0 and return a scalar.
+%   Internally, points are stored as columns. XOPT has the same orientation as X0.
 %
 %   XOPT = BDS(FUN, X0, OPTIONS) performs the
 %   optimization using the specified options in OPTIONS.
 %
-%   By default, BDS uses rolling momentum extrapolation followed by pattern
-%   extrapolation only if momentum accepts no improving point. Both searches
-%   use distance multipliers 1, 2, and 4 and are independently optional.
+%   By default, BDS searches along momentum and pattern directions from the
+%   same point after polling and keeps the best point found.
 %
-%   OPTIONS should be a structure containing various fields that configure the algorithm's behavior.
-%   The most important options correspond directly to the parameters in Algorithm 2 of
-%   https://lht97.github.io/documents/DFOS2024.pdf, which provides a simplified and practical
-%   framework suitable for most users. These options are highlighted below.
-%   Additional advanced options for specific or complex use cases are introduced later.
+%   OPTIONS should be a structure containing fields that configure the algorithm.
+%   Omitted or empty fields use their defaults. The options below specify the
+%   polling directions, block partition, step sizes, and sufficient decrease.
+%   Scheduling, acceleration, termination, and output options follow separately.
 %
 %   expand                      Expanding factor of step size. A real number no less than 1.
-%                               It depends on the dimension of the problem and whether the problem
-%                               is noisy or not and the Algorithm.
-%                               Default: 2.0.
+%                               Default: 2.0 for every objective. An explicit value
+%                               takes priority over the default.
 %   shrink                      Shrinking factor of step size. A positive number less than 1. It
-%                               depends on the dimension of the problem and whether the problem is
-%                               noisy or not and the Algorithm.
+%                               scales the step size after an unsuccessful block update.
 %                               Default: 0.5.
 %   num_blocks                  Number of blocks. A positive integer. The number of blocks
 %                               should be less than or equal to the dimension of the problem.
@@ -47,22 +44,13 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               initial step size of each block is set to alpha_init. If alpha_init
 %                               is a vector, then the initial step size of the i-th block is
 %                               set to alpha_init(i). If alpha_init is "auto",
-%                               then the initial polling steps are chosen by a
-%                               fminsearch-inspired scale-aware rule. For block b, let tau_b be its
-%                               StepTolerance. The coordinate scale radius s_i is
-%                               max(abs(x0(i)), tau_b) when x0(i) is nonzero and
-%                               max(1, tau_b) when x0(i) is exactly zero. Thus the starting point
-%                               defines the axis-aligned scale ellipsoid
-%                               {z : norm(diag(1./s)*z) <= 1} in the original coordinates.
-%                               For every final positive polling direction d_j in block b, including
-%                               any direction repaired by get_direction_set, its coefficient scale is
-%                               1/norm(diag(1./s)*d_j). The block uses the maximum of these scales and
-%                               tau_b because all directions in one block share a single step size.
-%                               For the coordinate basis, this exactly recovers the coordinate-wise
-%                               rule when num_blocks = n and the existing blockwise-maximum rule for
-%                               any other valid block partition. For a general basis, it transfers the
-%                               coordinate-axis scales of x0 to the actual polling directions without
-%                               treating the coordinates of D^(-1)*x0 as physical scale radii.
+%                               then the current implementation requires the standard
+%                               coordinate blocks {e_i,-e_i}, with block i assigned to
+%                               coordinate i. For x0(i) ~= 0, the step is
+%                               max(abs(x0(i)), StepTolerance(i)); for x0(i) == 0, it is
+%                               max(1, StepTolerance(i)). A zero coordinate supplies no
+%                               scale, so the unit step is used instead. General bases
+%                               and grouped blocks require explicit numeric initial steps.
 %                               Default: 1.
 %   forcing_function            The forcing function used for deciding whether the step achieves a
 %                               sufficient decrease. forcing_function should be a function handle.
@@ -73,38 +61,34 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               that
 %                               reduction_factor(1) <= reduction_factor(2) <= reduction_factor(3),
 %                               reduction_factor(1) >= 0, and reduction_factor(2) > 0.
-%                               After the "inner direct search" over each block, the base
-%                               point is updated to the best trial point in the block if
-%                               its reduction is more than
-%                               reduction_factor(1) * forcing_function(step size).
-%                               the step size in this block is shrunk if the reduction is at most
-%                               reduction_factor(2) * forcing_function(step size), and it is
-%                               expanded if the reduction is at least
-%                               reduction_factor(3) * forcing_function(step size).
-%                               Note: the step size passed to forcing_function is the step size
-%                               used in the current iteration (before any update), not the updated
-%                               step size for the next iteration.
+%                               Let xbase and fbase be the point and value before polling,
+%                               y and fy the best polling point and value, and alpha the
+%                               step used for this block. The base point is updated if
+%                               fy + reduction_factor(1)*forcing_function(alpha) < fbase.
+%                               The step is expanded if
+%                               fy + reduction_factor(3)*forcing_function(alpha) < fbase,
+%                               and otherwise shrunk if
+%                               fy + reduction_factor(2)*forcing_function(alpha) >= fbase.
+%                               These comparisons use alpha before its update. The inner
+%                               opportunistic search uses half the first coefficient to
+%                               decide when to stop polling; see inner_direct_search.m.
 %                               Default: [0, eps, eps]. See also forcing_function.
 %
 %   The following options are advanced options for users with specific needs.
 %   Algorithm                   Algorithm to use. It can be
-%                               'cbds' (sorted blockwise direct search)
-%                               'pbds' (randomly permuted blockwise direct search)
-%                               'rbds' (randomized blockwise direct search),
-%                               'pads' (parallel blockwise direct search)
-%                               'ds'   (the classical direct search).
-%                               If no Algorithm is specified in the options, the default setting
-%                               will be equivalent to using 'cbds' as the input.
-%                               The detail can be found in the set_options.m file.
-%   batch_size                  Suppose that batch_size is k. In each iteration, k blocks are
-%                               randomly selected to visit. A positive integer less than or equal
-%                               to num_blocks.
-%                               Default: num_blocks.
-%   replacement_delay           The delay for block replacement. If a block is selected in the
-%                               current iteration, it will not be selected in the next
-%                               replacement_delay iterations.
-%                               A non-negative integer.
-%                               Default: floor(num_blocks / batch_size) - 1.
+%                               'cyclic' or 'cbds' (cyclic blockwise direct search),
+%                               'permuted' or 'pbds' (randomly permuted blockwise direct search),
+%                               'random' or 'rbds' (randomized blockwise direct search), or
+%                               'ds'   (classical direct search with one block).
+%                               The default configuration is equivalent to 'cbds'.
+%                               An explicit Algorithm determines num_blocks. For cbds,
+%                               pbds and rbds it is length(x0); for ds it is 1. When
+%                               both options are given, their block counts must agree. If
+%                               Algorithm is omitted, num_blocks can specify a general
+%                               partition, visited cyclically. Permuted visits draw a new
+%                               permutation after every full round. Randomized visits
+%                               exclude the most recent num_blocks-1 visited blocks
+%                               when sampling the next block.
 %   grouped_direction_indices   A cell array of length num_blocks, where each cell contains a vector
 %                               of indices corresponding to the directions assigned to that block.
 %                               Each index is in the range 1 to n, where n is the problem dimension.
@@ -113,16 +97,6 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               always assigned to the same block. If this field is not provided,
 %                               the directions will be divided into num_blocks blocks as evenly as
 %                               possible by divide_direction_set.m.
-%   block_visiting_pattern      block_visiting_pattern to use. It can be
-%                               'sorted'   (The selected blocks will be visited in the order of
-%                                          their indices)
-%                               'random'   (The selected blocks will be visited in a random order)
-%                               'parallel' (The selected blocks will be visited in parallel)
-%                               Default: 'sorted'.
-%   is_noisy                    A flag deciding whether the problem is noisy or not. The value of
-%                               is_noisy will be only used to determine the values of expand and
-%                               shrink now.
-%                               Default: false.
 %   polling_inner               Polling strategy in each block. It can be "complete" or
 %                               "opportunistic". Default: "opportunistic".
 %   cycling_inner               Cycling strategy employed within each block. It is used only when
@@ -135,51 +109,24 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                               mode, which sets the seed based on the current time. This ensures
 %                               different random sequences across runs.
 %
-%   The following options are related to search acceleration.
-%   With cyclic coordinate blocks (the default), the first complete cycle
-%   performs one batch MP search. Later visits can perform rolling MP after
-%   polling improves the current base value. The direction sums the latest n
-%   polling/acceleration updates, replacing the oldest slot with the current
-%   polling update before the sum. Current acceleration enters future windows.
-%   Each block has its own momentum. The first cycle's momentum initializes
-%   the last block's vector; other vectors start at zero.
-%   Other bases, partitions or selection rules keep batch MP: one net
-%   displacement and one momentum vector after each selected batch.
-%   In both paths the direction norm must exceed max(StepTolerance), and
-%   evaluations must remain. See docs/BDS_ACCELERATION_OVERVIEW.md for dispatch.
-%   Function-value histories and optional stopping checks remain at batch
-%   boundaries (complete cycles for the default), not at every rolling visit.
-%   Any accepted acceleration point in the batch suppresses both extra checks.
+%   A complete visit is a sequence of consecutive block visits that covers
+%   every block at least once. Blocks may repeat. Search acceleration uses the
+%   complete visit ending now with the latest possible start. For additional
+%   termination checks, start at iteration 0 and take the first visit that
+%   completes coverage. Start the next complete visit at the following iteration.
 %
-%   use_iteration_pattern_step        Enable pattern extrapolation along the
-%                                     supplied window/batch direction. This
-%                                     option name is retained for compatibility.
-%                                     Pattern is attempted only if momentum is
-%                                     disabled, unavailable, or accepts no point.
-%                                     Default: true.
-%   use_momentum_extrapolation        Enable the momentum update and search:
-%                                     momentum = momentum_decay * momentum + ...
-%                                     (1 - momentum_decay) * direction/norm(direction).
-%                                     The updated vector is saved even if no
-%                                     point is accepted. It is normalized for
-%                                     searching only when its norm exceeds
-%                                     max(StepTolerance). Default: true.
-%   momentum_decay                    Weight of the preceding momentum vector.
-%                                     Zero uses only the current direction.
-%                                     Default: 0.6.
+%   use_search_acceleration     Enable momentum and pattern extrapolation.
+%                               Default: true.
+%   Acceleration requires a successful current poll and a complete visit.
+%   The displacement from the point before its first poll to the point after
+%   the current poll must be longer than max(StepTolerance). See accelerate.m
+%   for the two searches and the update to the current block's momentum.
 %
-%   Both searches use distances norm(direction) times 1, 2, and 4 from the
-%   same entry point. Each accepts strict improvements and stops at its first
-%   rejection, a reached target, or the evaluation budget. A later momentum
-%   rejection does not enable pattern if momentum accepted an earlier point.
-%   A pattern point identical to the rejected momentum point is not evaluated
-%   again. The acceleration switches remain independent.
-%   Retained-direction acceleration is not supported. For legacy callers,
-%   use_productive_direction_memory=false (or empty) is discarded; true raises
-%   an error. productive_direction_memory_size is discarded with a warning.
+%   The budget and target are checked after each evaluation, and step tolerances
+%   after each block update. The additional criteria below are checked at the
+%   end of a complete visit only if it accepted no extrapolation point.
+%   Neither additional criterion requires new function evaluations.
 %
-
-%   The following options are related to the termination criteria.
 %   MaxFunctionEvaluations                       Maximum number of function evaluations. A positive
 %                                                integer.
 %                                                Default: 500*length(x0).
@@ -192,22 +139,37 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                                must have one value for each block.
 %                                                Default: 1e-6.
 %   use_function_value_stop                      Whether to stop when the function value changes little
-%                                                over the last func_window_size iterations. This is an
-%                                                optional termination criterion.
+%                                                over the stored complete-visit values.
 %                                                Default: false.
-%   func_window_size                             Number of iterations used for the function-value
-%                                                stopping test. It should be a positive integer.
+%   func_window_size                             Number of values in the function-value window.
+%                                                The window contains the initial value and then
+%                                                the values at complete-visit ends, retaining only
+%                                                the latest func_window_size values. Every end is
+%                                                recorded, even if acceleration prevents checking.
+%                                                A positive integer, including 1. With size 1,
+%                                                the change is zero once the window is finite.
 %                                                Default: 20.
-%   func_tol                                     Tolerance for the change in function value. The change
-%                                                over the last func_window_size iterations is compared
-%                                                with [func_tol * 1e-3, func_tol].
+%   func_tol                                     Positive tolerance for function-value stagnation.
+%                                                Let change be the oldest minus the newest value
+%                                                in the window, f the current base value, and f_ref
+%                                                the initial finite value, or the first finite value
+%                                                recorded at a complete-visit end if needed.
+%                                                Once the window and reference are finite, stop if
+%                                                change < func_tol*min(1,abs(f-f_ref)), or
+%                                                change < 1e-3*func_tol*max(1,abs(f-f_ref)).
 %                                                Default: 1e-6.
 %   use_estimated_gradient_stop                  Whether to stop when the estimated gradient is small
 %                                                over the last grad_window_size estimates. This is an
-%                                                optional termination criterion.
+%                                                optional termination criterion. Estimates require
+%                                                complete finite paired polling samples at one
+%                                                unchanged base point throughout a complete visit.
+%                                                Repeated visits replace the same block's samples,
+%                                                using their actual steps before shrinkage.
 %                                                Default: false.
 %   grad_window_size                             Number of estimated gradients used for the gradient
 %                                                stopping test. It should be a positive integer.
+%                                                Complete visits without an available estimate
+%                                                neither fill nor shift this window.
 %                                                Default: 1.
 %   grad_tol                                     Tolerance for the reference-scaled estimated gradient
 %                                                norm. After a reliable reference norm G_ref has been
@@ -217,72 +179,38 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                                G < 1e-3 * grad_tol * max(1, G_ref).
 %                                                The two branches have the same form as function-value
 %                                                stopping, with G_ref as the fixed reference scale.
+%                                                Each G is the gradient norm plus its estimated
+%                                                finite-difference error. G_ref is the first such
+%                                                value passing the reference-selection checks.
 %                                                The reference estimate is not part of the window.
 %                                                Default: 1e-2.
-%   lipschitz_constant                           Estimate of the objective function's Lipschitz constant.
-%                                                It is used to compute the gradient error bound when
+%   lipschitz_constant                           Estimate of the Lipschitz constant of the Hessian.
+%                                                This estimates a property assumed of the problem.
+%                                                With exact function values, the error bound requires
+%                                                that the Hessian is Lipschitz continuous and that
+%                                                this supplied value bounds its Lipschitz constant.
+%                                                Without that verification it gives a heuristic
+%                                                error estimate, not a guaranteed error bound.
+%                                                It scales the central-difference expression when
 %                                                use_estimated_gradient_stop is true. The value must be
 %                                                a positive scalar.
 %                                                Default: 1e3.
-%   use_gradient_reference_consistency           Whether to require a consistency check before
-%                                                initializing the gradient reference scale. The
-%                                                current gradient estimate, grad, is compared with
-%                                                previous_gradient, the estimate retained from the
-%                                                preceding iteration that produced a valid gradient
-%                                                estimate. Both estimates must come from iterations
-%                                                whose polling phase did not obtain a sufficient
-%                                                decrease. The two estimates must be computed at
-%                                                exactly the same base point xbase. Their relative
-%                                                difference is computed as
-%                                                norm(grad - previous_gradient) /
-%                                                max(1, norm(grad), norm(previous_gradient)).
-%                                                The consistency check passes only when this ratio is
-%                                                less than or equal to grad_reference_raw_tol. Both
-%                                                gradient estimates reuse ordinary polling evaluations,
-%                                                so the check does not require extra function
-%                                                evaluations. Passing the consistency check is
-%                                                necessary but not sufficient to initialize the
-%                                                gradient reference scale. The separate gradient
-%                                                error bound test must also pass.
+%   use_gradient_reference_consistency           Whether to require agreement with the preceding
+%                                                available gradient estimate at the same point
+%                                                before fixing the gradient reference. The
+%                                                reference error check must also pass. These
+%                                                checks apply only when selecting the reference.
 %                                                Default: true.
-%   grad_reference_finite_difference_error_tol   Tolerance for the relative finite difference error
-%                                                inferred by comparing two gradient estimates at the
-%                                                same base point. Each estimate uses ordinary polling
-%                                                evaluations and the current step size of every visited
-%                                                block. The step size for block i in the second estimate
-%                                                is the corresponding step size in the first estimate
-%                                                multiplied by shrink. Polling directions and visited
-%                                                blocks can differ between the two iterations because
-%                                                the solver may select different batches. The threshold
-%                                                conversion uses the leading truncation term of the
-%                                                central difference formula. To see the conversion,
-%                                                consider a fixed direction d_i with step h_i in the
-%                                                first estimate and theta*h_i in the second, where theta
-%                                                is the public shrink factor. The leading error of the
-%                                                first directional estimate is proportional to h_i^2.
-%                                                Replacing h_i by theta*h_i changes the leading error
-%                                                to theta^2*e_i. The leading difference between the two
-%                                                directional estimates is therefore (1-theta^2)*e_i,
-%                                                while the leading error in the second estimate is
-%                                                theta^2*e_i. The second directional error is consequently
-%                                                estimated from the difference by the factor
-%                                                theta^2/(1-theta^2). The solver applies the same factor
-%                                                to calibrate the consistency ratio between grad and
-%                                                previous_gradient after gradient reconstruction. If
-%                                                this option is tol, the corresponding raw consistency
-%                                                threshold is tol*(1-theta^2)/theta^2, stored as
-%                                                grad_reference_raw_tol. The conversion is a leading
-%                                                order calibration for the reconstructed gradient
-%                                                consistency ratio, not an exact error identity for the
-%                                                complete reconstructed gradient. The derivation applies
-%                                                to general polling directions and does not require an
-%                                                orthogonal or coordinate basis. When
-%                                                use_gradient_reference_consistency is true, the
-%                                                consistency ratio between grad and previous_gradient
-%                                                is compared with grad_reference_raw_tol. With
-%                                                shrink=0.5, the default value gives
-%                                                grad_reference_raw_tol = 0.1.
+%   grad_reference_finite_difference_error_tol   Positive tolerance calibrating the preceding
+%                                                consistency check from an estimated relative
+%                                                finite-difference error. With shrink=0.5,
+%                                                the default gives raw consistency tolerance 0.1.
+%                                                See check_additional_termination.m for the
+%                                                ratio, calibration, and assumptions. This option
+%                                                affects reference selection only when
+%                                                use_gradient_reference_consistency is true.
 %                                                Default: 1/30.
+%
 %   The following options control solver output and diagnostic information.
 %   output_xhist                          Whether to output the history of points visited.
 %                                         Default: false.
@@ -298,9 +226,10 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %                                         0: no information is printed.
 %                                         1: a message is printed at return, showing the best
 %                                            vector of variables found and its objective value.
-%                                         2: in addition to level 1, each function evaluation and
-%                                            its variables are printed. The step size for each
-%                                            block is also printed.
+%                                         2: in addition to level 1, the initial and polling
+%                                            evaluations and polling step sizes are printed.
+%                                            Extrapolation evaluations are recorded in fhist
+%                                            and optional xhist, but not printed individually.
 %                                         3: in addition to level 2, the sufficient-decrease
 %                                            result and decrease value are printed for each block.
 %                                         Default: 0.
@@ -317,29 +246,31 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %   function value FOPT.
 %
 %   [XOPT, FOPT, EXITFLAG] = BDS(...) also returns an EXITFLAG that indicates
-%   the exit condition. The possible values of EXITFLAG are 0, 1, 2, 3, 4, and 5, corresponding to
+%   the exit condition. The possible values of EXITFLAG are 0, 1, 3, 4, and 5, corresponding to
 %   the following exit conditions.
 %
 %   0    The target of the objective function is reached.
 %   1    The maximum number of function evaluations is reached.
-%   2    The maximum number of iterations is reached.
 %   3    The StepTolerance of the step size is reached.
 %   4    The change of the function value is small.
 %   5    The estimated gradient is small.
 %   [XOPT, FOPT, EXITFLAG, OUTPUT] = BDS(...) returns a
 %   structure OUTPUT with the following fields.
-%   fhist                       History of function values.
+%   fhist                       Raw evaluation history, including the initial value and NaN
+%                               for caught exceptions. NaN is compared as +Inf internally.
+%                               Failed evaluations still count towards the budget.
 %   grad_hist                   History of estimated gradients if output_grad_hist is true.
+%   grad_iter                   Complete-visit numbers corresponding to grad_hist, if
+%                               output_grad_hist is true. These numbers can have gaps.
 %   grad_xhist                  History of points where estimated gradients are computed if
 %                               output_grad_hist is true.
 %   xhist                       History of points visited if output_xhist is true.
 %   invalid_points              History of points where function evaluation fails if
 %                               output_xhist is true.
-%   alpha_hist                  History of step sizes for each iteration if output_alpha_hist
-%                               is true. Not all blocks are necessarily visited in every
-%                               iteration. For a block skipped in an iteration, alpha_hist
-%                               records the step size carried forward from the previous
-%                               iteration.
+%   alpha_hist                  Initial steps, then steps after each round for cbds/pbds,
+%                               or after each visit for rbds/ds, if output_alpha_hist is true.
+%                               A terminating partial round is included. This output
+%                               sampling does not determine complete-visit boundaries.
 %   blocks_hist                 History of blocks visited if output_block_hist is true.
 %   funcCount                   Number of function evaluations.
 %   message                     Message corresponding to EXITFLAG.
@@ -354,6 +285,9 @@ function [xopt, fopt, exitflag, output] = bds(fun, x0, options)
 %   All rights reserved.
 %
 
+% Input and options.
+% Validate the public interface and preserve the input orientation.
+
 % Set options to an empty structure if it is not provided.
 if nargin < 3
     options = struct();
@@ -364,7 +298,8 @@ if ~isrealvector(x0)
     error("BDS:InvalidInput", "x0 should be a real vector.");
 end
 
-% Convert x0 to a double column vector.
+% Accept x0 as a row or column vector. Remember its shape and use a double
+% column vector for internal calculations.
 x0_is_row = isrow(x0);
 x0 = double(x0(:));
 
@@ -384,656 +319,331 @@ n = length(x0);
 % Set the default value of options.
 options = set_options(options, n, x0);
 
+% Polling directions and block partition.
+
 MaxFunctionEvaluations = options.MaxFunctionEvaluations;
-% Preserve the public batch/iteration limit. A nonempty batch uses at least
-% one evaluation, so the evaluation budget bounds the number of batches.
-maxit = MaxFunctionEvaluations;
-
-ftarget = options.ftarget;
-
-alpha_tol = options.StepTolerance;
-
-% The following variables are used for the optional stopping criteria.
-use_function_value_stop = options.use_function_value_stop;
-func_window_size = options.func_window_size;
-func_tol = options.func_tol;
-% Initialize fopt_window with inf values. This ensures that the objective-change
-% stopping criterion remains inactive until the window is fully replaced with
-% valid fopt values. Using inf instead of nan is necessary because the subsequent
-% computation involves calculating the difference between the maximum and minimum
-% values in this array. If nan were used, the result of max and min would ignore
-% nan values and return the same valid value repeatedly, leading to an incorrect
-% difference of 0, which is not the intended behavior.
-fopt_window = inf(1, func_window_size);
-reference_function_value = nan;
-
-use_estimated_gradient_stop = options.use_estimated_gradient_stop;
-grad_window_size = options.grad_window_size;
-grad_tol = options.grad_tol;
-% Initialize with nan to disable the stopping test until the window is fully replaced with
-% valid gradient norms.
-norm_grad_window = nan(1, grad_window_size);
-reference_grad_norm_initialized = false;
-reference_candidate_reliable = ~options.use_gradient_reference_consistency;
-previous_gradient = [];
-previous_gradient_x = [];
-
-lipschitz_constant = options.lipschitz_constant;
-
-% Get the direction set.
+% Construct the final polling basis before assigning directions to blocks.
+% D stores positive/negative pairs in consecutive columns. Each pair stays in
+% the same block. positive_direction_set is the basis used for gradient recovery.
 D = get_direction_set(n, options);
 positive_direction_set = D(:, 1:2:end);
-
 num_blocks = options.num_blocks;
+[grouped_direction_indices, block_of_direction_pair] = divide_direction_set(n, num_blocks, options);
+alpha_tol = options.StepTolerance;
 
-batch_size = options.batch_size;
+% Initial step sizes.
+% The automatic rule is implemented only for the paper's standard coordinate
+% blocks. Check the requested basis as well as the final partition, so repair
+% does not silently turn an unsupported request into a supported auto case.
 
-replacement_delay = options.replacement_delay;
-
-% Determine the indices of directions in each block.
-grouped_direction_indices = divide_direction_set(n, num_blocks, options);
-
-block_visiting_pattern = options.block_visiting_pattern;
-% Separate scheduling from acceleration: only the validated cyclic coordinate
-% configuration uses rolling MP. All other resolved configurations keep batch MP.
-rolling = initialize_rolling_acceleration(options, positive_direction_set, ...
-    grouped_direction_indices);
-
-% Resolve automatic initial steps only after get_direction_set has produced the final basis and the
-% directions have been assigned to blocks. For block i, get_auto_alpha_init supplies the coordinate
-% radii of the scale ellipsoid associated with alpha_tol(i). Dividing each final positive direction
-% by these radii and taking the reciprocal Euclidean norm gives the coefficient that reaches the
-% ellipsoid boundary along that direction. A block has one shared step, so it takes the largest
-% direction coefficient. The explicit alpha_tol(i) floor matters when a custom basis contains a
-% direction whose norm is greater than one.
 if ischarstr(options.alpha_init) && strcmpi(options.alpha_init, 'auto')
-    alpha_all = zeros(num_blocks, 1);
-    for i = 1:num_blocks
-        positive_direction_indices = ...
-            (grouped_direction_indices{i}(1:2:end) + 1) / 2;
-        alpha_all(i) = max([alpha_tol(i), 1 ./ vecnorm( ...
-            positive_direction_set(:, positive_direction_indices) ./ ...
-            get_auto_alpha_init(x0, alpha_tol(i), 1, 1), 2, 1)]);
+    coordinate_blocks = num_blocks == n && isequal(options.direction_set, eye(n));
+    if coordinate_blocks
+        for i = 1:n
+            coordinate_blocks = coordinate_blocks && isequal(grouped_direction_indices{i}, [2 * i - 1, 2 * i]);
+        end
     end
+    if ~coordinate_blocks
+        error('BDS:AutoInitialStepsCoordinateOnly', ...
+            'alpha_init="auto" requires standard coordinate blocks. Supply numeric initial steps for this configuration.');
+    end
+    alpha_all = get_auto_alpha_init(x0, alpha_tol);
 else
     alpha_all = options.alpha_init;
 end
 
-expand = options.expand;
-shrink = options.shrink;
+% Block visit schedule.
+% The visit order is separate from the intervals used for acceleration and
+% stopping. Keep a private stream and the current permutation only as needed.
 
-forcing_function = options.forcing_function;
+% Use a private random stream for block scheduling. This avoids consuming the
+% caller's random stream, which may also be used by a noisy objective function.
+random_stream = RandStream('mt19937ar', 'Seed', options.seed);
+% Keep the actual block history even when output_block_hist is false. It also
+% supplies the preceding visits excluded by the randomized selection rule.
+% Iterations k start at zero; MATLAB stores visit k in column k+1.
+block_hist = zeros(1, MaxFunctionEvaluations);
+num_visited_blocks = 0;
 
-reduction_factor = options.reduction_factor;
+% Complete visits for acceleration and termination, and per-block momentum.
 
-polling_inner = options.polling_inner;
+% For each block, store its latest visit index and the point BEFORE that poll.
+% The value -1 marks a block that has not yet been visited. Once every block has
+% appeared, the smallest latest index is the latest possible start of a window
+% that covers all blocks. Saving these points avoids summing past displacements.
+last_visit_indices = -ones(1, num_blocks);
+last_visit_start_points = zeros(n, num_blocks);
+% Each column belongs to an actual block, not to its position in a scheduling
+% group. A permutation therefore changes visit order without exchanging memory.
+momentum = zeros(n, num_blocks);
+step_floor = max(alpha_tol);
 
-cycling_inner = options.cycling_inner;
+% Forward complete visits and additional termination state.
 
-seed = options.seed;
-random_stream = RandStream("mt19937ar", "Seed", seed);
+complete_visit_count = 0;
+complete_visit_start = 0;
+% Accumulate acceptances since this start. A later failed visit must not
+% erase an earlier accepted poll or acceleration in the same complete visit.
+any_acceleration_accepted_in_complete_visit = false;
+any_poll_accepted_in_complete_visit = false;
+% Store paired values in the original column order of D. Each block records
+% the step used at its most recent poll, before any expansion or shrinkage.
+% NaN marks unavailable samples, so an incomplete segment cannot yield a gradient.
+poll_values = nan(2 * n, 1);
+last_poll_step = nan(num_blocks, 1);
 
-momentum = zeros(n, 1);
-momentum_decay = options.momentum_decay;
+% The function window starts with the initial value. Inf placeholders prevent
+% a partially filled window from satisfying the finite-value requirement.
+% The gradient window contains only estimates AFTER reference selection; NaN
+% placeholders prevent a missing estimate from being mistaken for a small one.
+stop_state = struct('function_window', inf(1, options.func_window_size), ...
+    'function_reference', nan, 'gradient_window', nan(1, options.grad_window_size), ...
+    'gradient_reference', nan, 'previous_gradient', [], 'previous_point', []);
 
+% Output histories.
+% These optional records do not control the internal histories needed above.
+
+grad_hist = [];
+grad_xhist = [];
+grad_iter = [];
 output_xhist = options.output_xhist;
+output_alpha_hist = options.output_alpha_hist;
 xhist = [];
 invalid_points = [];
 if output_xhist
     xhist = nan(n, MaxFunctionEvaluations);
 end
+alpha_hist = alpha_all(:);
 fhist = nan(1, MaxFunctionEvaluations);
 
-% Read-only configuration for the post-poll acceleration phase.
-acceleration_configuration = struct( ...
-    'use_iteration_pattern_step', options.use_iteration_pattern_step, ...
-    'use_momentum_extrapolation', options.use_momentum_extrapolation, ...
-    'momentum_decay', momentum_decay, ...
-    'step_floor', max(alpha_tol), ...
-    'MaxFunctionEvaluations', MaxFunctionEvaluations, ...
-    'ftarget', ftarget, ...
-    'output_xhist', output_xhist);
+% Initial evaluation and immediate termination checks.
 
-output_alpha_hist = options.output_alpha_hist;
-% Record the initial step size into the alpha_hist.
-if output_alpha_hist
-    alpha_hist(:, 1) = alpha_all(:);
-end
-output_block_hist = options.output_block_hist;
-% Initialize the history of blocks visited.
-block_hist = nan(1, MaxFunctionEvaluations);
-
-output_grad_hist = options.output_grad_hist;
-
-iprint = options.iprint;
-
-% Initialize gradient history variables and info structure.
-% grad_info.step_size_per_batch stores step sizes for the batch_size blocks
-% visited in the current iteration (used for gradient estimation).
-% grad_info.step_size_per_block stores step sizes for all num_blocks blocks
-% (used for computing gradient error bounds).
-grad_hist = [];
-grad_xhist = [];
-grad_iter = [];
-grad_info = struct();
-grad_info.n = n;
-grad_info.step_size_per_batch = nan(batch_size, 1);
-grad_info.step_size_per_block = alpha_all;
-grad_info.fbase_per_batch = nan(batch_size, 1);
-grad_info.complete_direction_set = D;
-
-% Initialize exitflag with the default termination status.
-% If no other termination condition overrides it, completing maxit iterations
-% leaves exitflag equal to MAXIT_REACHED.
-exitflag = get_exitflag("MAXIT_REACHED");
-
-% Evaluate the function at the starting point x0.
-% f0_real is the real function value at x0, while f0 might be different from f0_real.
-% The detail is explained in eval_fun.m.
-[f0, f0_real, is_valid] = eval_fun(fun, x0);
-% Initialize nf (the number of function evaluations), xhist (history of points visited), and
-% fhist (history of function values).
+% eval_fun catches evaluation errors and maps NaN to +Inf for comparisons.
+% Keep the raw value separately for fhist and count the evaluation even if it
+% fails. xbase is the point used by polling; xopt is the best evaluated point,
+% which may differ when a positive acceptance coefficient rejects a small gain.
+[fbase, f0_real, valid] = eval_fun(fun, x0);
 nf = 1;
-if output_xhist
-    % invalid_points will store the points where the function evaluation fails.
-    % Specifically, it records points that result in NaN values or trigger an error
-    % during the function evaluation. This information can be useful for debugging
-    % or analyzing problematic regions in the search space. Note that invalid_points
-    % will only be included in the output if output_xhist is set to true.
-    invalid_points = [];
-    xhist(:, nf) = x0;
-    if ~is_valid
-        invalid_points = [invalid_points, x0];
-    end
-end
-% When we record fhist, we should use the real function value at x0, which is f0_real.
-fhist(nf) = f0_real;
-if iprint >= 2
-    fprintf("The initial step size is:\n");
-    print_aligned_vector(alpha_all);
-    fprintf("Function number %d    F = %23.16E\n", nf, f0_real);
-    fprintf("The corresponding X is:\n");
-    print_aligned_vector(x0);
-    fprintf("\n");
-    if ~is_valid
-        fprintf("Warning: The function evaluation at the initial point x0 is not valid.\n");
-    end
-end
-
-% Initialize xopt and fopt with x0 and f(x0), respectively. At this point, since
-% only one point has been evaluated, xopt and fopt are trivially the best point
-% and function value. Note that during each iteration, xopt and fopt are updated
-% only after the iteration completes, so they may not represent the true optimal
-% point and value within an iteration.
+xbase = x0;
 xopt = x0;
-fopt = f0;
-
-% Fix the function-value stopping scale at the first finite incumbent. If the
-% initial evaluation fails, leave the reference uninitialized until the solver
-% first recovers a finite incumbent.
-if isfinite(fopt)
-    reference_function_value = fopt;
+fopt = fbase;
+fhist(nf) = f0_real;
+if output_xhist
+    xhist(:, nf) = x0;
+    if ~valid
+        invalid_points = x0;
+    end
 end
-
-% Update fopt_window with the initial objective value. Although no iteration
-% has been performed yet, the initial evaluation at x0 is treated as the
-% zeroth iteration for the purpose of the sliding window used in the
-% objective-change stopping criterion.
-fopt_window = [fopt_window(2:end), fopt];
-
+% Use the initial value as the function reference only when it is finite.
+% Otherwise, select the first finite complete-visit value later in the loop.
+if isfinite(fbase)
+    stop_state.function_reference = fbase;
+end
+stop_state.function_window(end) = fbase;
+exitflag = get_exitflag('MAXFUN_REACHED');
 terminate = false;
-% Check whether ftarget or MaxFunctionEvaluations is reached immediately after every function
-% evaluation. If one of them is reached at x0, no further computation should be entertained,
-% and hence, we will not run any iteration by setting maxit to 0.
-if f0_real <= ftarget
-    maxit = 0;
+% Preserve the raw initial-value target check: a failed initial evaluation
+% (NaN) must not satisfy the target merely because it is compared as +Inf.
+if f0_real <= options.ftarget
+    exitflag = get_exitflag('FTARGET_REACHED');
     terminate = true;
-    exitflag = get_exitflag("FTARGET_REACHED");
 elseif nf >= MaxFunctionEvaluations
-    maxit = 0;
     terminate = true;
-    exitflag = get_exitflag("MAXFUN_REACHED");
+end
+iprint = options.iprint;
+if iprint >= 2
+    fprintf('Function number %d    F = %23.16E\n', nf, f0_real);
+    print_aligned_vector(xbase);
 end
 
-% Initialize xbase and fbase. xbase serves as the "base point" for the computation in the next
-% block, meaning that reduction will be calculated with respect to xbase. fbase is the function
-% value at xbase.
-xbase = xopt;
-fbase = fopt;
-
-% Initialize the number of blocks visited.
-num_visited_blocks = 0;
-
-% fopt_all(i) stores the best function value found in the i-th block after one iteration,
-% while xopt_all(:, i) holds the corresponding x. If a block is not visited during the iteration,
-% fopt_all(i) is set to nan. fopt_all is a vector of length num_blocks, and xopt_all is an
-% n-by-num_blocks matrix. Not all blocks are necessarily visited in each iteration, but the best
-% function value and corresponding point across all blocks must still be recorded.
-fopt_all = nan(1, num_blocks);
-xopt_all = nan(n, num_blocks);
-
-% One pass of the execution loop visits one block. The batch context retains
-% scheduling and history units; it is not a second execution loop. In parallel
-% mode, batch.xbase/fbase stay shared until the batch-finalization section.
-batch = struct('index', 1, 'position', 1);
-while batch.index <= maxit && ~terminate
-
-    % BEGIN BATCH: select blocks and initialize batch-level records once.
-    if batch.position == 1
-        % Save the base point and function value at the beginning of the iteration.
-        batch.xbase = xbase;
-        batch.fbase = fbase;
-
-        % Accumulate acceleration success over the whole batch/cycle. Rolling
-        % visits OR their results into this flag before the stopping checks.
-        post_poll_acceleration_succeeded = false;
-
-        % Define batch.indices, a vector that specifies both the indices of the blocks
-        % and the order in which they will be visited during the current iteration.
-        % The length of batch.indices is equal to batch_size.
-        % These blocks should not have been visited in the previous replacement_delay
-        % iterations. Each completed iteration contributes batch_size entries to block_hist.
-        unavailable_block_indices = unique(block_hist(max(1, (batch.index - replacement_delay - 1) * batch_size + 1) : ...
-                                    (batch.index-1) * batch_size), 'stable');
-        available_block_indices = setdiff(1:num_blocks, unavailable_block_indices);
-
-        % Select batch_size blocks randomly from the available blocks. The selected blocks
-        % will be visited in this iteration.
-        batch.indices = available_block_indices(random_stream.randperm(length(available_block_indices), ...
-                        batch_size));
-
-        % Compute the direction selection probability matrix.
-        direction_selection_probability_matrix = get_direction_probability_matrix(n, batch_size, ...
-                                                grouped_direction_indices, available_block_indices);
-        grad_info.direction_selection_probability_matrix = direction_selection_probability_matrix;
-
-        % Choose the block indices based on options.block_visiting_pattern.
-        if strcmpi(block_visiting_pattern, "sorted")
-            batch.indices = sort(batch.indices);
+% Block visits.
+% Each pass consumes at least one evaluation, so the evaluation budget gives
+% a finite upper bound on the number of visits.
+for k = 0:MaxFunctionEvaluations - 1
+    if terminate
+        break;
+    end
+    position = mod(k, num_blocks) + 1;
+    if strcmp(options.Algorithm, 'rbds')
+        % Preserve the established randomized rule: exclude the last num_blocks-1
+        % visits, then sample one available block using the private stream.
+        first = max(1, k - num_blocks + 2);
+        available = setdiff(1:num_blocks, block_hist(first:k));
+        i = available(random_stream.randperm(numel(available), 1));
+    else
+        if position == 1
+            order = random_stream.randperm(num_blocks, num_blocks);
         end
-
-        % Initialize sampled_direction_indices_per_batch as a cell array of length batch_size to store
-        % the indices of directions evaluated in each batch during the current iteration.
-        % Initialize function_values_per_batch as a cell array of length batch_size to store the
-        % function values computed in each batch during the current iteration.
-        % Initialize batch_gradient_available as a logical array of length batch_size, indicating whether
-        % each block qualifies for gradient estimation based on specific criteria.
-        sampled_direction_indices_per_batch = cell(1, batch_size);
-        function_values_per_batch = cell(1, batch_size);
-        % When the following two conditions are satisfied, the block is eligible for gradient estimation:
-        % (1) sufficient decrease criterion is not met.
-        % (2) all directions in the block have been evaluated.
-        % The second condition is essential because gradient estimation requires complete
-        % directional information. Without it, we might incorrectly attempt gradient estimation
-        % when function evaluation budget is 1 and this only function evaluation does not achieve
-        % sufficient decrease. This situation is particularly critical when num_blocks = 1.
-        batch_gradient_available = false(1, batch_size);
+        if strcmp(options.Algorithm, 'pbds')
+            i = order(position);
+        else
+            % Cyclic visits need only the position. Retain the per-round random
+            % draw so the private stream matches established seeded runs.
+            i = position;
+        end
     end
-
-    % VISIT ONE BLOCK: reuse the private polling interface, then rolling MP.
-    % The batch position and the global block index are distinct.
-    i_real = batch.indices(batch.position);
-    if rolling.enabled
-        point_before_poll = xbase;
-        value_before_poll = fbase;
-    end
-
-    % Get indices of directions in the i_real-th block.
-    direction_indices = grouped_direction_indices{i_real};
-
-    % Gradient data use global block indices for persistent steps and batch
-    % positions for samples gathered within this batch. In parallel mode,
-    % xbase/fbase still equal the saved batch base for every visit.
-    grad_info.step_size_per_block(i_real) = alpha_all(i_real);
-    grad_info.step_size_per_batch(batch.position) = alpha_all(i_real);
-    grad_info.fbase_per_batch(batch.position) = fbase;
-
-    % Set the options for the direct search within the i_real-th block.
-    suboptions = struct( ...
-        'FunctionEvaluations_exhausted', nf, ...
+    block_hist(k + 1) = i;
+    num_visited_blocks = k + 1;
+    % Record the visit before polling, regardless of whether it will succeed.
+    % Window coverage is about which blocks were visited, not which improved.
+    last_visit_indices(i) = k;
+    last_visit_start_points(:, i) = xbase;
+    value_before_poll = fbase;
+    alpha = alpha_all(i);
+    direction_indices = grouped_direction_indices{i};
+    % Poll this block from the current base, passing only the remaining budget.
+    % The polling helper checks the target and budget after each evaluation.
+    % Its returned direction order is used on the next visit to this block.
+    suboptions = struct('FunctionEvaluations_exhausted', nf, ...
         'MaxFunctionEvaluations', MaxFunctionEvaluations - nf, ...
-        'ftarget', ftarget, ...
-        'forcing_function', forcing_function, ...
-        'reduction_factor', reduction_factor, ...
-        'polling_inner', polling_inner, ...
-        'cycling_inner', cycling_inner, ...
-        'iprint', iprint, ...
-        'i_real', i_real);
-
-    % Perform the direct search within the i_real-th block.
-    [sub_xopt, sub_fopt, sub_exitflag, sub_output] = inner_direct_search(fun, xbase,...
-        fbase, D(:, direction_indices), direction_indices,...
-        alpha_all(i_real), suboptions);
-
-    % Record the index of the block visited.
-    num_visited_blocks = num_visited_blocks + 1;
-    block_hist(num_visited_blocks) = i_real;
-
-    % Record the points visited by inner_direct_search if output_xhist is true.
+        'ftarget', options.ftarget, 'forcing_function', options.forcing_function, ...
+        'reduction_factor', options.reduction_factor, 'polling_inner', options.polling_inner, ...
+        'cycling_inner', options.cycling_inner, 'iprint', iprint, 'i_real', i);
+    [x_poll, f_poll, sub_exitflag, sub_output] = inner_direct_search(fun, xbase, fbase, ...
+        D(:, direction_indices), direction_indices, alpha, suboptions);
+    % Append the polling evaluations in their actual order, including failures.
+    % The raw histories are distinct from the values used for comparisons.
+    fhist(nf + (1:sub_output.nf)) = sub_output.fhist;
     if output_xhist
-        xhist(:, (nf+1):(nf+sub_output.nf)) = sub_output.xhist;
+        xhist(:, nf + (1:sub_output.nf)) = sub_output.xhist;
         invalid_points = [invalid_points, sub_output.invalid_points];
     end
-
-    % Record the function values calculated by inner_direct_search,
-    fhist((nf+1):(nf+sub_output.nf)) = sub_output.fhist;
-
-    % Update the number of function evaluations.
-    nf = nf+sub_output.nf;
-
-    % Record evaluated directions in their pre-cycling order. Unvisited
-    % batch positions remain empty and cannot certify a complete gradient.
-    sampled_direction_indices_per_batch{batch.position} = direction_indices(1:sub_output.nf);
-
-    % Store function values for the current batch.
-    function_values_per_batch{batch.position} = sub_output.fhist;
-
-    % Record whether all directions in the i_real-th block have been evaluated and
-    % sufficient decrease is not achieved.
-    batch_gradient_available(batch.position) = (sub_output.nf == length(direction_indices)) && ...
-    ~sub_output.sufficient_decrease;
-
-    % Record the best function value and point encountered in the i_real-th block.
-    fopt_all(i_real) = sub_fopt;
-    xopt_all(:, i_real) = sub_xopt;
-
-    % Retrieve the direction indices of the i_real-th block, which represent the order of the
-    % directions in the i_real-th block when we perform the direct search in this block next time.
-    grouped_direction_indices{i_real} = sub_output.direction_indices;
-
-    % Whether to update xbase and fbase. xbase serves as the "base point" for the computation
-    % in the next block, meaning that reduction will be calculated with respect to xbase, as
-    % shown above. The condition must be checked before updating alpha_all(i_real) because the
-    % sufficient decrease is calculated based on the current step size.
-    % eval_fun maps a failed NaN evaluation to Inf for algorithmic comparisons.
-    % Keep the NaN clauses as defensive safeguards in case that policy changes.
-    update_base = (sub_fopt + reduction_factor(1) * forcing_function(alpha_all(i_real)) < fbase) ...
-                || (isnan(fbase) && ~isnan(sub_fopt));
-    % Update the step size alpha_all according to the reduction achieved.
-    if (sub_fopt + reduction_factor(3) * forcing_function(alpha_all(i_real)) < fbase) ...
-            || (isnan(fbase) && ~isnan(sub_fopt))
-        alpha_all(i_real) = expand * alpha_all(i_real);
-    elseif (sub_fopt + reduction_factor(2) * forcing_function(alpha_all(i_real)) >= fbase) ...
-            || (isnan(sub_fopt) && ~isnan(fbase))
-        alpha_all(i_real) = shrink * alpha_all(i_real);
+    nf = nf + sub_output.nf;
+    grouped_direction_indices{i} = sub_output.direction_indices;
+    if f_poll < fopt
+        xopt = x_poll;
+        fopt = f_poll;
     end
+    % Update the base only after the acceptance comparison using the old step.
+    % Record the best evaluated point separately, even if that gain is too small
+    % to pass a positive sufficient-decrease coefficient.
+    poll_accepted = f_poll + options.reduction_factor(1) * options.forcing_function(alpha) < fbase;
+    if poll_accepted
+        xbase = x_poll;
+        fbase = f_poll;
+    end
+    any_poll_accepted_in_complete_visit = any_poll_accepted_in_complete_visit || poll_accepted;
 
-    % Terminate the computations if sub_output.terminate is true, which means that
-    % inner_direct_search decides that the algorithm should be terminated for some reason
-    % indicated by sub_exitflag.
+    % Save actual finite-difference samples and their PRE-shrink steps. Repeated
+    % visits replace the same block's samples; any accepted poll invalidates the
+    % whole segment for gradient estimation because its base would have changed.
+    poll_values(direction_indices) = nan;
+    if sub_output.nf == numel(direction_indices) && ~poll_accepted
+        poll_values(direction_indices) = sub_output.fhist(:);
+    end
+    last_poll_step(i) = alpha;
+    % Expand or shrink only the step of the visited block. Use the value before
+    % polling and the step actually used, rather than an already updated step.
+    if f_poll + options.reduction_factor(3) * options.forcing_function(alpha) < value_before_poll
+        alpha_all(i) = options.expand * alpha;
+    elseif f_poll + options.reduction_factor(2) * options.forcing_function(alpha) >= value_before_poll
+        alpha_all(i) = options.shrink * alpha;
+    end
     if sub_output.terminate
         terminate = true;
         exitflag = sub_exitflag;
     elseif all(alpha_all < alpha_tol)
         terminate = true;
-        exitflag = get_exitflag("SMALL_ALPHA");
+        exitflag = get_exitflag('SMALL_ALPHA');
     end
 
-    % Sequential visits commit the base now. Parallel visits defer that
-    % commit to batch finalization. Terminal visits retain the existing exit
-    % order: update steps and best-point records, but do not commit a new base.
-    if ~terminate && ~strcmpi(block_visiting_pattern, "parallel") && update_base
-        xbase = sub_xopt;
-        fbase = sub_fopt;
-    end
-    if ~terminate && rolling.enabled
-        acceleration_state = struct( ...
-            'xbase', xbase, 'fbase', fbase, 'nf', nf, ...
-            'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
-            'momentum', rolling.momentum(:, i_real));
-        [acceleration_state, rolling, acceleration_succeeded, ...
-            target_reached, acceleration_attempted] = run_rolling_acceleration( ...
-            fun, acceleration_state, acceleration_configuration, rolling, ...
-            i_real, num_visited_blocks, point_before_poll, value_before_poll);
-        xbase = acceleration_state.xbase;
-        fbase = acceleration_state.fbase;
-        nf = acceleration_state.nf;
-        fhist = acceleration_state.fhist;
-        xhist = acceleration_state.xhist;
-        invalid_points = acceleration_state.invalid_points;
-        % This flag covers the ENTIRE cycle, not only its last visit.
-        post_poll_acceleration_succeeded = ...
-            post_poll_acceleration_succeeded || acceleration_succeeded;
-        if acceleration_attempted && fbase < fopt
-            fopt = fbase;
-            xopt = xbase;
-        end
-        if target_reached
-            terminate = true;
-            exitflag = get_exitflag("FTARGET_REACHED");
-        end
-    end
-    % Continue immediately with the next block unless this batch is complete
-    % or an exit was reached. Even a partial terminal batch is finalized once.
-    if ~terminate && nf < MaxFunctionEvaluations ...
-            && batch.position < numel(batch.indices)
-        batch.position = batch.position + 1;
-        continue;
-    end
-
-    % FINALIZE BATCH: shared-base commit, batch MP, histories and stopping.
-    % Record the step sizes after the current iteration if output_alpha_hist is true.
-    % The first column stores the initial step sizes. Each subsequent column stores
-    % the step sizes carried into the next iteration.
-    if output_alpha_hist
-        alpha_hist = [alpha_hist, alpha_all(:)];
-    end
-
-    % Update xopt and fopt. Note that we do this only if the iteration encounters a strictly
-    % better point. Make sure that fopt is always the minimum of fhist after the moment we update
-    % fopt. The determination between fopt_all and fopt is to avoid the case that fopt_all is
-    % bigger than fopt due to the update of xbase and fbase.
-    % NOTE: If the function values are complex, the min function will return the value with the
-    % smallest norm (magnitude).
-    [~, index] = min(fopt_all, [], "omitnan");
-    if fopt_all(index) < fopt
-        fopt = fopt_all(index);
-        xopt = xopt_all(:, index);
-    end
-
-    % Actually, fopt is not always the minimum of fhist after the moment we update fopt
-    % since the value we used to iterate is not always equal to the value returned by the function.
-    % See eval_fun.m for details.
-    % assert(fopt == min(fhist));
-
-    % Parallel visits used the same saved batch base. Commit the shared
-    % result here, including when the budget ended a partially visited batch.
-    if strcmpi(block_visiting_pattern, "parallel")
-        % Update xbase and fbase. xbase serves as the "base point" for the computation in the
-        % next block, meaning that reduction will be calculated with respect to xbase, as shown above.
-        % Note that their update requires a sufficient decrease if reduction_factor(1) > 0.
-        if (reduction_factor(1) <= 0 && fopt < fbase) || fopt + reduction_factor(1) * ...
-            forcing_function(min(alpha_all)) < fbase
-            xbase = xopt;
-            fbase = fopt;
-        end
-    end
-
-    % Summarize the net displacement accumulated since the beginning of the
-    % current iteration for the post-poll acceleration phase.
-    iteration_step = xbase - batch.xbase;
-
-    % Post-poll acceleration phase: try momentum, then a pattern step if needed.
-    % The entry guard stays here to keep the phase ordering visible;
-    % post_poll_acceleration_state packs exactly the mutable state the phase
-    % may update.
-    % Rolling uses this phase only to bootstrap the first cycle. Keeping the
-    % batch boundary also preserves iteration limits and output history units.
-    if (~rolling.enabled || batch.index == 1) && ~terminate && fbase < batch.fbase ...
-            && norm(iteration_step) > acceleration_configuration.step_floor ...
-            && nf < MaxFunctionEvaluations ...
-            && (options.use_iteration_pattern_step || options.use_momentum_extrapolation)
-        post_poll_acceleration_state = struct( ...
-            'xbase', xbase, 'fbase', fbase, ...
-            'nf', nf, 'fhist', fhist, 'xhist', xhist, 'invalid_points', invalid_points, ...
-            'momentum', momentum);
-        [post_poll_acceleration_state, post_poll_acceleration_succeeded, ...
-            post_poll_target_reached] = run_post_poll_acceleration_phase( ...
-                fun, post_poll_acceleration_state, ...
-                acceleration_configuration, iteration_step);
-        xbase = post_poll_acceleration_state.xbase;
-        fbase = post_poll_acceleration_state.fbase;
-        nf = post_poll_acceleration_state.nf;
-        fhist = post_poll_acceleration_state.fhist;
-        xhist = post_poll_acceleration_state.xhist;
-        invalid_points = post_poll_acceleration_state.invalid_points;
-        momentum = post_poll_acceleration_state.momentum;
-        if rolling.enabled
-            rolling = finish_rolling_bootstrap(rolling, post_poll_acceleration_state);
-        end
-        if post_poll_target_reached
-            terminate = true;
-            exitflag = get_exitflag("FTARGET_REACHED");
-        end
-    end
-
-    if fbase < fopt
-        fopt = fbase;
-        xopt = xbase;
-    end
-
-    if isnan(reference_function_value) && isfinite(fopt)
-        reference_function_value = fopt;
-    end
-
-    % Track the best function value observed among the latest func_window_size iterations.
-    fopt_window = [fopt_window(2:end), fopt];
-
-    % Check if the optimization should stop due to insufficient change in the objective function
-    % over the last func_window_size iterations. If the change is below a specified threshold,
-    % terminate the optimization. This check is performed after the current iteration is complete,
-    % ensuring fopt_window includes the latest function value.
-    % Scale the thresholds with the displacement from the first finite
-    % incumbent. This remains translation invariant even when the initial
-    % evaluation fails. The test stays inactive until both the reference and
-    % every entry of the sliding window are finite.
-    if use_function_value_stop && ~post_poll_acceleration_succeeded ...
-            && isfinite(reference_function_value) && all(isfinite(fopt_window))
-        func_change = max(fopt_window) - min(fopt_window);
-        if func_change < (func_tol * min(1, abs(fopt - reference_function_value))) || ...
-                func_change < (1e-3 * func_tol * max(1, abs(fopt - reference_function_value)))
-            terminate = true;
-            exitflag = get_exitflag("SMALL_OBJECTIVE_CHANGE");
-        end
-    end
-
-    % When sufficient decrease is not achieved in any batch, we estimate the gradient.
-    if ~post_poll_acceleration_succeeded && all(batch_gradient_available)
-        grad_info.sampled_direction_indices_per_batch = sampled_direction_indices_per_batch;
-        grad_info.function_values_per_batch = function_values_per_batch;
-        grad = estimate_gradient(grad_info);
-        % A gradient estimate is available exactly when estimate_gradient returns
-        % the documented n-by-1 real vector with finite components. Magnitude is
-        % not a validity condition: zero and very small estimates are essential
-        % for detecting stationarity, and large finite estimates remain valid.
-        if isrealcolumn(grad) && numel(grad) == n && all(isfinite(grad))
-            % Record the estimated gradient in grad_hist.
-            grad_hist = [grad_hist, grad];
-            % Record the corresponding xbase in grad_xhist. As long as all batches do not achieve
-            % sufficient decrease, we record the estimated gradient. Thus, xbase should be recorded
-            % not xopt even if xopt is better than xbase.
-            grad_xhist = [grad_xhist, xbase];
-            % Preserve the public gradient-history index: it counts batches,
-            % not passes through the block-visit loop.
-            grad_iter = [grad_iter, batch.index];
-
-            if use_estimated_gradient_stop
-
-                % Compute the gradient error bound.
-                % Note that we use grad_info.step_size_per_block (not step_size_per_batch) and
-                % grouped_direction_indices (not sampled_direction_indices_per_batch) because
-                % computing the gradient error bound requires complete information about ALL blocks,
-                % not just the batch_size blocks visited in the current iteration.
-                % step_size_per_block contains step sizes for all num_blocks blocks.
-                % grouped_direction_indices contains direction assignments for all num_blocks blocks.
-                % This is different from gradient estimation, which only needs information about
-                % the visited blocks in the current iteration.
-                grad_error = get_gradient_error_bound(grad_info.step_size_per_block, ...
-                                                    batch_size, grouped_direction_indices, n, ...
-                                                    positive_direction_set, ...
-                                                    direction_selection_probability_matrix, ...
-                                                    lipschitz_constant);
-
-                % Core gradient-stopping logic: decide whether the current estimated gradient
-                % can be used to initialize reference_grad_norm. A gradient estimate is generated
-                % in an iteration only when ordinary polling provides complete directional
-                % information without sufficient decrease and no post-poll acceleration is
-                % accepted.
-
-                % In the core algorithm, the consistency test has exactly one purpose: deciding
-                % whether reference_grad_norm may be initialized. Gradient estimates added to
-                % norm_grad_window after initialization do not undergo the consistency test.
-                % When use_gradient_reference_consistency is false, the current estimate becomes
-                % a reference candidate without comparison with an earlier estimate. When the
-                % option is true, the most recent available estimate must exist, both estimates
-                % must be computed at the same xbase, and their consistency ratio is computed as
-                %     norm(grad - previous_gradient) /
-                %         max(1, norm(grad), norm(previous_gradient)).
-                % The ratio must not exceed grad_reference_raw_tol. The estimate stored in
-                % previous_gradient need not come from the immediately preceding outer iteration.
-                % Passing the consistency test is necessary but not sufficient for initialization.
-                % The gradient error test below must also pass. Once reference_grad_norm has
-                % been initialized, the consistency test is no longer needed and is not computed.
-                % Core gradient-stopping state update. Before initialization, a reliable estimate
-                % establishes the fixed reference scale. After initialization, each new estimate
-                % is appended to the sliding window as a conservative norm upper bound.
-                if ~reference_grad_norm_initialized && options.use_gradient_reference_consistency
-                    reference_candidate_reliable = ~isempty(previous_gradient) ...
-                        && isequal(xbase, previous_gradient_x) ...
-                        && (norm(grad - previous_gradient) / ...
-                            max([1, norm(grad), norm(previous_gradient)]) ...
-                            <= options.grad_reference_raw_tol);
-                end
-                if ~reference_grad_norm_initialized && reference_candidate_reliable ...
-                        && grad_error < max(1e-3, 1e-1 * norm(grad))
-                    reference_grad_norm = norm(grad) + grad_error;
-                    reference_grad_norm_initialized = true;
-                elseif reference_grad_norm_initialized
-                    norm_grad_window = [norm_grad_window(2:end), norm(grad) + grad_error];
-                end
-
-                % Use the same two-branch form as function-value stopping, but with the
-                % fixed reliable gradient reference instead of the objective decrease.
-                % The first branch requires an absolute and a relative tolerance together;
-                % the second supplies a smaller absolute or relative fallback tolerance.
-                % Every entry must pass one branch, so an incomplete window cannot stop.
-                if reference_grad_norm_initialized ...
-                        && (all(norm_grad_window ...
-                            < grad_tol * min(1, reference_grad_norm)) ...
-                            || all(norm_grad_window ...
-                            < 1e-3 * grad_tol * max(1, reference_grad_norm)))
-                    terminate = true;
-                    exitflag = get_exitflag("SMALL_ESTIMATE_GRADIENT");
-                end
-
-                if ~reference_grad_norm_initialized ...
-                        && options.use_gradient_reference_consistency
-                    previous_gradient = grad;
-                    previous_gradient_x = xbase;
-                end
-
+    [latest_start, start_block, visit_complete] = ...
+        complete_visit_status(last_visit_indices, complete_visit_start);
+    acceleration_accepted = false;
+    if ~terminate && options.use_search_acceleration && latest_start >= 0 ...
+            && poll_accepted && fbase < value_before_poll
+        % Both searches start at the accepted polling point. Earlier accepted
+        % accelerations contribute to the displacement across this complete visit.
+        pattern = xbase - last_visit_start_points(:, start_block);
+        step = norm(pattern);
+        if step > step_floor
+            [xnew, fnew, acceleration_exitflag, extra, momentum(:, i)] = accelerate( ...
+                fun, xbase, fbase, pattern / step, step, momentum(:, i), step_floor, ...
+                MaxFunctionEvaluations - nf, options.ftarget, output_xhist);
+            fhist(nf + (1:extra.nf)) = extra.fhist;
+            if output_xhist
+                xhist(:, nf + (1:extra.nf)) = extra.xhist;
+                invalid_points = [invalid_points, extra.invalid_points];
+            end
+            nf = nf + extra.nf;
+            acceleration_accepted = fnew < fbase;
+            xbase = xnew;
+            fbase = fnew;
+            if fbase < fopt
+                xopt = xbase;
+                fopt = fbase;
+            end
+            if ~isempty(acceleration_exitflag)
+                terminate = true;
+                exitflag = acceleration_exitflag;
             end
         end
     end
+    % Preserve acceleration success anywhere in the current complete visit.
+    % In particular, failure at its last block must not enable extra stopping.
+    any_acceleration_accepted_in_complete_visit = any_acceleration_accepted_in_complete_visit || acceleration_accepted;
 
-    if ~terminate && nf >= MaxFunctionEvaluations
-        terminate = true;
-        exitflag = get_exitflag("MAXFUN_REACHED");
-    elseif ~terminate && all(alpha_all < alpha_tol)
-        terminate = true;
-        exitflag = get_exitflag("SMALL_ALPHA");
+    % At the first visit covering all blocks since complete_visit_start, check
+    % the applicable criteria before polling another block. Record the function
+    % value even if an accepted acceleration rules out stopping here.
+    if visit_complete
+        complete_visit_count = complete_visit_count + 1;
+        stop_state.function_window = [stop_state.function_window(2:end), fbase];
+        if isnan(stop_state.function_reference) && isfinite(fbase)
+            stop_state.function_reference = fbase;
+        end
+        % Keep the applicability conditions here, where the execution flow is
+        % visible. The shared helper computes the criteria and reference updates.
+        % A function window requires finite values. A gradient additionally needs
+        % paired finite samples, positive recorded steps, and no accepted poll,
+        % so all samples come from the same unchanged base point.
+        check_function = options.use_function_value_stop ...
+            && all(isfinite(stop_state.function_window)) ...
+            && isfinite(stop_state.function_reference);
+        check_gradient = (options.use_estimated_gradient_stop || options.output_grad_hist) ...
+            && ~any_poll_accepted_in_complete_visit && all(isfinite(poll_values)) ...
+            && all(isfinite(last_poll_step)) && all(last_poll_step > 0);
+        % A completed criterion can explain the final evaluation even when it
+        % also exhausts the budget. A reached target retains priority.
+        check_stopping = ~terminate || exitflag ~= get_exitflag('FTARGET_REACHED');
+        if ~any_acceleration_accepted_in_complete_visit && ((check_stopping && check_function) || check_gradient)
+            [stop_state, stop_flag, grad] = check_additional_termination( ...
+                stop_state, xbase, fbase, poll_values, last_poll_step(block_of_direction_pair), ...
+                positive_direction_set, options, check_function && check_stopping, check_gradient);
+            % Record every available estimate requested for diagnostics, even
+            % when the gradient stopping switch is off. Number these estimates
+            % by complete visits; missing estimates can leave gaps in grad_iter.
+            if options.output_grad_hist && ~isempty(grad)
+                grad_hist(:, end + 1) = grad;
+                grad_xhist(:, end + 1) = xbase;
+                grad_iter(end + 1) = complete_visit_count;
+            end
+            if check_stopping && ~isempty(stop_flag)
+                terminate = true;
+                exitflag = stop_flag;
+            end
+        end
+        % Start the next forward complete visit at the next block. Reset only
+        % segment data. Rolling history, per-block momentum, reference values,
+        % and the two stopping windows persist across complete visits.
+        complete_visit_start = k + 1;
+        any_acceleration_accepted_in_complete_visit = false;
+        any_poll_accepted_in_complete_visit = false;
+        poll_values(:) = nan;
+        last_poll_step(:) = nan;
     end
-
-    % Start a new batch only after completing all boundary operations.
-    batch.index = batch.index + 1;
-    batch.position = 1;
+    % Preserve each algorithm's established step-history sampling. This output
+    % convention does not determine the complete visits used for stopping.
+    if output_alpha_hist && (position == num_blocks || strcmp(options.Algorithm, 'rbds') || terminate)
+        alpha_hist(:, end + 1) = alpha_all(:);
+    end
 end
 
-% Record the number of function evaluations in output.
+% Return only the evaluations and visits that actually occurred. Optional
+% outputs do not control the internal histories needed by the algorithm.
 output.funcCount = nf;
-% Truncate the histories of the blocks visited, the step sizes, the points visited,
-% and the function values.
-if output_block_hist
+output.fhist = fhist(1:nf);
+if options.output_block_hist
     output.blocks_hist = block_hist(1:num_visited_blocks);
 end
 if output_alpha_hist
@@ -1043,13 +653,11 @@ if output_xhist
     output.xhist = xhist(:, 1:nf);
     output.invalid_points = invalid_points;
 end
-if output_grad_hist
+if options.output_grad_hist
     output.grad_hist = grad_hist;
     output.grad_xhist = grad_xhist;
     output.grad_iter = grad_iter;
 end
-
-output.fhist = fhist(1:nf);
 
 % Set the message according to exitflag.
 switch exitflag
@@ -1057,8 +665,6 @@ switch exitflag
         output.message = "The target of the objective function is reached.";
     case get_exitflag("MAXFUN_REACHED")
         output.message = "The maximum number of function evaluations is reached.";
-    case get_exitflag("MAXIT_REACHED")
-        output.message = "The maximum number of iterations is reached.";
     case get_exitflag("SMALL_ALPHA")
         output.message = "The StepTolerance of the step size is reached.";
     case get_exitflag("SMALL_OBJECTIVE_CHANGE")

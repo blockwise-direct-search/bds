@@ -1146,13 +1146,12 @@ function x = bds_benchmark_profile_test( ...
     options.alpha_init = 1;
     options.expand = 2.0;
     options.shrink = 0.5;
-    options.is_noisy = false;
+
     options.forcing_function = @(alpha) alpha^2;
     options.reduction_factor = [0, eps, eps];
     options.polling_inner = 'opportunistic';
     options.cycling_inner = 1;
-    options.use_iteration_pattern_step = use_acceleration;
-    options.use_momentum_extrapolation = use_acceleration;
+    options.use_search_acceleration = use_acceleration;
     options.use_function_value_stop = use_function_stop;
     options.func_window_size = 20;
     options.func_tol = 1e-6;
@@ -1177,7 +1176,7 @@ end
 function x = ds_test_noisy(fun, x0, is_noisy)
 
     option.Algorithm = 'ds';
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
 end
 
@@ -1205,7 +1204,7 @@ function x = ds_randomized_orthogonal_test_noisy(fun, x0, is_noisy)
     [Q,R] = qr(randn(numel(x0), numel(x0)));
     Q(:, diag(R) < 0) = -Q(:, diag(R) < 0);
     option.direction_set = Q;
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1220,7 +1219,7 @@ end
 function x = pbds_test_noisy(fun, x0, is_noisy)
 
     option.Algorithm = 'pbds';
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
 
 end
@@ -1369,7 +1368,7 @@ end
 function x = cbds_test_noisy(fun, x0, is_noisy)
 
     option.Algorithm = 'cbds';
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1415,7 +1414,7 @@ function x = cbds_randomized_orthogonal_test_noisy(fun, x0, is_noisy)
     [Q,R] = qr(randn(numel(x0), numel(x0)));
     Q(:, diag(R) < 0) = -Q(:, diag(R) < 0);
     option.direction_set = Q;
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1432,7 +1431,7 @@ function x = cbds_randomized_gaussian_test_noisy(fun, x0, is_noisy)
 
     option.direction_set = randn(numel(x0), numel(x0));
     option.direction_set = option.direction_set ./ vecnorm(option.direction_set);
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1453,7 +1452,7 @@ function x = cbds_permuted_test_noisy(fun, x0, is_noisy)
     P = eye(numel(x0));
     P = P(p,:);
     option.direction_set = P;
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1549,7 +1548,7 @@ end
 function x = rbds_test_noisy(fun, x0, is_noisy)
 
     option.Algorithm = 'rbds';
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1718,7 +1717,7 @@ end
 function x = pads_test_noisy(fun, x0, is_noisy)
 
     option.Algorithm = 'pads';
-    option.is_noisy = is_noisy;
+
     x = bds(fun, x0, option);
     
 end
@@ -1733,7 +1732,7 @@ end
 function x = scbds_test_noisy(fun, x0, is_noisy)
 
     option.Algorithm = 'scbds';
-    option.is_noisy = is_noisy;
+
     x = bds_development(fun, x0, option);
     
 end
@@ -1938,8 +1937,11 @@ end
 
 function x = bds_acceleration_test(fun, x0, use_pattern, use_momentum)
 
-    options.use_iteration_pattern_step = use_pattern;
-    options.use_momentum_extrapolation = use_momentum;
+    if use_pattern ~= use_momentum
+        error('profile_optiprofiler:IndependentAccelerationRemoved', ...
+            'Single-direction configurations require a historical BDS version.');
+    end
+    options.use_search_acceleration = use_pattern;
     x = bds(fun, x0, options);
 
 end
@@ -1949,8 +1951,11 @@ function x = bds_acceleration_profile_test( ...
     max_eval_factor, step_tolerance)
 
     options.Algorithm = algorithm;
-    options.use_iteration_pattern_step = use_pattern;
-    options.use_momentum_extrapolation = use_momentum;
+    if use_pattern ~= use_momentum
+        error('profile_optiprofiler:IndependentAccelerationRemoved', ...
+            'Single-direction configurations require a historical BDS version.');
+    end
+    options.use_search_acceleration = use_pattern;
     options.MaxFunctionEvaluations = max_eval_factor*length(x0);
     options.StepTolerance = step_tolerance;
     x = bds(fun, x0, options);
@@ -1959,8 +1964,7 @@ end
 
 function x = bds_acceleration_budget_limited_test(fun, x0)
 
-    options.use_iteration_pattern_step = true;
-    options.use_momentum_extrapolation = true;
+    options.use_search_acceleration = true;
     options.StepTolerance = 1e-12;
     x = bds(fun, x0, options);
 
@@ -2007,14 +2011,13 @@ function options = accelerated_500n_profile_options(x0)
     options.ftarget = -Inf;
     options.expand = 1.8;
     options.shrink = 0.5;
-    options.is_noisy = false;
+
     options.forcing_function = @(alpha) alpha^2;
     options.reduction_factor = [0, eps, eps];
     options.polling_inner = 'opportunistic';
     options.cycling_inner = 1;
     options.seed = 0;
-    options.use_iteration_pattern_step = true;
-    options.use_momentum_extrapolation = true;
+    options.use_search_acceleration = true;
     options.use_function_value_stop = false;
     options.use_estimated_gradient_stop = false;
 
@@ -2029,7 +2032,7 @@ function x = auto_alpha_init_profile_test( ...
     options.ftarget = -Inf;
     options.expand = 1.8;
     options.shrink = 0.5;
-    options.is_noisy = false;
+
     options.forcing_function = @(alpha) alpha^2;
     options.reduction_factor = [0, eps, eps];
     options.polling_inner = 'opportunistic';
@@ -2045,8 +2048,7 @@ function x = auto_alpha_init_profile_test( ...
     end
 
     if use_acceleration
-        options.use_iteration_pattern_step = true;
-        options.use_momentum_extrapolation = true;
+        options.use_search_acceleration = true;
         options.alpha_init = alpha_init;
         x = bds(fun, x0, options);
     else
@@ -2076,14 +2078,13 @@ function x = accelerated_auto_stopping_profile_test(fun, x0, ...
     options.ftarget = -Inf;
     options.expand = 1.8;
     options.shrink = 0.5;
-    options.is_noisy = false;
+
     options.forcing_function = @(alpha) alpha^2;
     options.reduction_factor = [0, eps, eps];
     options.polling_inner = 'opportunistic';
     options.cycling_inner = 1;
     options.seed = 0;
-    options.use_iteration_pattern_step = true;
-    options.use_momentum_extrapolation = true;
+    options.use_search_acceleration = true;
     options.alpha_init = auto_alpha_init_candidate( ...
         x0, options.StepTolerance, 1, 1);
     options.use_function_value_stop = use_function_stop;

@@ -36,7 +36,7 @@ try
                 assert(strcmp(func2str(actual.forcing_function), func2str(expected.forcing_function)));
                 assert(isequaln(rmfield(actual, 'forcing_function'), rmfield(expected, 'forcing_function')));
             end
-            verify_bds_removed_retained_options();
+            verify_bds_unknown_options();
             summary.defaults = verify_bds_mp_defaults(@c03_bds_mp, result_directory);
             mkdir(fullfile(result_directory, 'iseqiv'));
             summary.iseqiv = verify_bds_mp_reference(fullfile(result_directory, 'iseqiv'), 'smoke');

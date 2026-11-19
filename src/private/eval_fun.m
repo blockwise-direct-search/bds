@@ -19,8 +19,8 @@ end
 f = f_real;
 
 % Handling NaN:
-% If the function failed (NaN), we must tell the algorithm this is a "bad" point 
-% by setting f to Inf. However, we keep f_real as NaN so the history reflects 
+% If the function failed (NaN), we must tell the algorithm this is a "bad" point
+% by setting f to Inf. However, we keep f_real as NaN so the history reflects
 % the actual evaluation failure.
 if isnan(f_real)
     f = inf;
@@ -30,7 +30,7 @@ end
 % Handling Inf/Huge values:
 % We do NOT truncate huge values or Inf. Direct search handles them natively.
 % So if f_real is 1e50 or Inf, f remains 1e50 or Inf.
-% This ensures f and f_real are consistent in valid regions, but distinct 
+% This ensures f and f_real are consistent in valid regions, but distinct
 % (Inf vs NaN) in failure regions.
 
 end

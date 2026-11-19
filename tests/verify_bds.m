@@ -198,9 +198,7 @@ end
 
 function [xopt, fopt, exitflag, output] = run_bds_without_acceleration(fun, x0, options)
 
-options.use_productive_direction_memory = false;
-options.use_iteration_pattern_step = false;
-options.use_momentum_extrapolation = false;
+options.use_search_acceleration = false;
 [xopt, fopt, exitflag, output] = bds(fun, x0, options);
 
 end

@@ -16,25 +16,21 @@ original_random_state = rng();
 cleanup = onCleanup(@() rng(original_random_state));
 rng(12345);
 random_state = rng();
-summary = struct('defaults_passed', 0, 'reference_passed', 0, 'legacy_false_passed', 0);
+summary = struct('defaults_passed', 0, 'reference_passed', 0);
 for n = [1,3,7]
     x0 = (1:n)' / 3;
     options = struct('seed', 12345, 'output_xhist', true, ...
         'output_alpha_hist', true, 'output_block_hist', true, 'output_grad_hist', true);
     implicit = record_bds_execution(@bds, @objective, x0, options, random_state);
-    options.use_iteration_pattern_step = true;
-    options.use_momentum_extrapolation = true;
+    options.use_search_acceleration = true;
     explicit = record_bds_execution(@bds, @objective, x0, options, random_state);
     assert(isequaln(implicit, explicit), 'Default switches differ from explicit MP.');
     summary.defaults_passed = summary.defaults_passed + 1;
-    options.use_productive_direction_memory = false;
-    legacy = record_bds_execution(@bds, @objective, x0, options, random_state);
-    assert(isequaln(implicit, legacy), 'Legacy false changed the complete trajectory.');
-    summary.legacy_false_passed = summary.legacy_false_passed + 1;
+
 end
 if ~isempty(reference_solver)
     n = 3;
-    for switches = 0:3
+    for switches = [0, 3]
         for stops = 0:3
             for kind = 1:4
                 x0 = (1:n)' / 3;
@@ -42,8 +38,7 @@ if ~isempty(reference_solver)
                     x0 = x0';
                 end
                 options = bds_paper_options(x0, 'external', 'mp');
-                options.use_iteration_pattern_step = logical(bitget(switches,1));
-                options.use_momentum_extrapolation = logical(bitget(switches,2));
+                options.use_search_acceleration = logical(switches);
                 options.use_function_value_stop = logical(bitget(stops,1));
                 options.use_estimated_gradient_stop = logical(bitget(stops,2));
                 options.output_xhist = true;
@@ -63,8 +58,8 @@ if ~isempty(reference_solver)
         end
     end
 end
-fprintf('BDS_MP_DEFAULTS_OK: defaults=%d reference=%d legacy_false=%d\n', ...
-    summary.defaults_passed, summary.reference_passed, summary.legacy_false_passed);
+fprintf('BDS_MP_DEFAULTS_OK: defaults=%d reference=%d\n', ...
+    summary.defaults_passed, summary.reference_passed);
 
     function value = objective(x)
         value = sum((diag(1:n) * (x(:) - 0.27)).^2) + 0.01 * sum(sin(x(:)));

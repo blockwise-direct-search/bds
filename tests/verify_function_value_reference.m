@@ -23,9 +23,8 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
             @(x) delayed_recovery_objective(x, 0), options);
 
         production_options = options;
-        production_options.use_productive_direction_memory = false;
-        production_options.use_iteration_pattern_step = false;
-        production_options.use_momentum_extrapolation = false;
+
+        production_options.use_search_acceleration = false;
         [production_result, production_calls] = run_production( ...
             @(x) delayed_recovery_objective(x, 0), production_options);
 
@@ -50,8 +49,7 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
 
     function verify_acceleration_on_recovery()
         options = function_stop_options();
-        options.use_iteration_pattern_step = true;
-        options.use_momentum_extrapolation = true;
+        options.use_search_acceleration = true;
         stop_options = lean_stop_options(2);
 
         [production_result, production_calls] = run_production( ...
@@ -102,17 +100,15 @@ fprintf('FUNCTION_VALUE_REFERENCE_OK\n');
 
         [reference_result, reference_calls] = run_reference(constant_objective, options);
         off_options = options;
-        off_options.use_productive_direction_memory = false;
-        off_options.use_iteration_pattern_step = false;
-        off_options.use_momentum_extrapolation = false;
+
+        off_options.use_search_acceleration = false;
         [off_result, off_calls] = run_production(constant_objective, off_options);
         assert_same_bds_result(reference_result, off_result);
         assert(isequal(reference_calls, off_calls) && reference_result.exitflag == 4, ...
             'Finite-initial-value behavior changed in the acceleration-off case.');
 
         on_options = options;
-        on_options.use_iteration_pattern_step = true;
-        on_options.use_momentum_extrapolation = true;
+        on_options.use_search_acceleration = true;
         [on_result, on_calls] = run_production(constant_objective, on_options);
         [lean_result, lean_calls] = run_lean( ...
             constant_objective, lean_stop_options(2), false);

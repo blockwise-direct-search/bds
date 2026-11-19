@@ -103,7 +103,7 @@ for name = {'accelerated-bds-all-on-200n', 'accelerated-ds-all-on-200n', ...
     run_profile(name, stub_dir);
     options = BDS_PROFILE_MAPPING_CALLS.bds_options;
     assert(~isfield(options, 'use_productive_direction_memory'));
-    assert(options.use_iteration_pattern_step && options.use_momentum_extrapolation);
+    assert(options.use_search_acceleration);
 end
 
 clear global BDS_PROFILE_MAPPING_CALLS
@@ -142,14 +142,13 @@ assert(isinf(options.ftarget) && options.ftarget < 0);
 assert(options.alpha_init == 1);
 assert(options.expand == 2.0);
 assert(options.shrink == 0.5);
-assert(~options.is_noisy);
+assert(~isfield(options,'is_noisy'));
 assert(options.forcing_function(3) == 9);
 assert(isequal(options.reduction_factor, [0, eps, eps]));
 assert(strcmp(options.polling_inner, 'opportunistic'));
 assert(options.cycling_inner == 1);
 assert(~isfield(options, 'use_productive_direction_memory'));
-assert(options.use_iteration_pattern_step == use_acceleration);
-assert(options.use_momentum_extrapolation == use_acceleration);
+assert(options.use_search_acceleration == use_acceleration);
 assert(options.use_function_value_stop == use_function_stop);
 assert(options.func_window_size == 20);
 assert(options.func_tol == 1e-6);

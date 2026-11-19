@@ -3,7 +3,8 @@ function verify_bds_without_acceleration_reference()
 %
 % The reference is a snapshot of the production BDS implementation immediately
 % before acceleration was promoted to src/bds.m. This check must pass before
-% src/bds.m is replaced.
+% src/bds.m is replaced. Additional stopping and gradient diagnostics use
+% general complete visits now; their dedicated tests cover the new semantics.
 
 tests_dir = fileparts(mfilename('fullpath'));
 root_dir = fileparts(tests_dir);
@@ -13,7 +14,7 @@ cleanup = onCleanup(@() path(old_path));
 addpath(fullfile(root_dir, 'src'));
 addpath(fullfile(tests_dir, 'competitors'));
 
-algorithms = ["cbds", "pbds", "rbds", "pads", "ds"];
+algorithms = ["cbds", "pbds", "rbds", "ds"];
 seeds = [12345, 23456];
 x0 = [1; -0.5; 2];
 
@@ -27,11 +28,11 @@ for algorithm = algorithms
         options.output_xhist = true;
         options.output_alpha_hist = true;
         options.output_block_hist = true;
-        options.output_grad_hist = true;
-        options.use_function_value_stop = true;
+        options.output_grad_hist = false;
+        options.use_function_value_stop = false;
         options.func_window_size = 4;
         options.func_tol = 1e-12;
-        options.use_estimated_gradient_stop = true;
+        options.use_estimated_gradient_stop = false;
         options.grad_window_size = 2;
         options.grad_tol = 1e-12;
 
@@ -46,17 +47,18 @@ for algorithm = algorithms
 end
 
 block_options = { ...
-    struct('num_blocks', 1, 'batch_size', 1, ...
+    struct('num_blocks', 1, ...
         'StepTolerance', 1e-6), ...
-    struct('num_blocks', 2, 'batch_size', 2, ...
+    struct('num_blocks', 2, ...
         'StepTolerance', [1e-6; 1e-4]), ...
-    struct('num_blocks', 2, 'batch_size', 1, ...
+    struct('num_blocks', 2, ...
         'grouped_direction_indices', {{[1, 3], 2}}, ...
         'StepTolerance', [1e-5; 1e-3])};
 
 for i = 1:numel(block_options)
     options = block_options{i};
-    options.alpha_init = 'auto';
+    initial_steps={2,[1;2],[2;.5]};
+    options.alpha_init = initial_steps{i};
     options.MaxFunctionEvaluations = 60;
     options.expand = 1.8;
     options.seed = 13579;
@@ -87,7 +89,7 @@ for algorithm = algorithms
     options = struct('Algorithm', char(algorithm), 'seed', 12345, ...
         'MaxFunctionEvaluations', 500 * numel(x0), 'expand', 2, ...
         'output_xhist', true, 'output_alpha_hist', true, ...
-        'output_block_hist', true, 'output_grad_hist', true);
+        'output_block_hist', true, 'output_grad_hist', false);
     random_state = rng();
     production = record_bds_execution(@bds, @objective, x0, ...
         disable_acceleration(options), random_state);
@@ -105,9 +107,7 @@ end
 
 function options = disable_acceleration(options)
 
-options.use_productive_direction_memory = false;
-options.use_iteration_pattern_step = false;
-options.use_momentum_extrapolation = false;
+options.use_search_acceleration = false;
 
 end
 

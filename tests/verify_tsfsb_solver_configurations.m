@@ -75,7 +75,11 @@ for n = [2, 7]
         options.output_alpha_hist = true;
         % Audit the historical TSFSB options above unchanged. Execute the
         % current MP counterpart below; retained=true is no longer supported.
-        options = rmfield(options, 'use_productive_direction_memory');
+        options = current_options(options);
+    if strcmp(options.Algorithm,'ds')
+        scales=max(abs(x0),options.StepTolerance);scales(x0==0)=max(1,options.StepTolerance);
+        options.alpha_init=max(scales);
+    end
         [~, ~, ~, output] = bds(@focused_objective, x0, options);
         assert(isequal(output.alpha_hist(:, 1), expected_steps(:)), ...
             'Unexpected production initial steps for %s at n=%d.', ...
@@ -83,6 +87,12 @@ for n = [2, 7]
     end
 end
 
+end
+
+function options = current_options(options)
+options.use_search_acceleration = options.use_iteration_pattern_step;
+options = rmfield(options, {'use_productive_direction_memory', 'is_noisy', ...
+    'use_iteration_pattern_step', 'use_momentum_extrapolation'});
 end
 
 function verify_external_option_structs()
@@ -152,10 +162,14 @@ for configuration = {'bds', 'bds-without-acceleration', 'ds'}
     options = tsfsb_benchmark_options(x0, configuration{1});
     if options.use_productive_direction_memory
         assert_throws(@() bds(objective, x0, options), ...
-            'BDS:RemovedProductiveDirectionMemory');
+            'BDS:UnknownOption');
     end
     % Execute the current counterpart, not a reproduction of historical TSFSB.
-    options = rmfield(options, 'use_productive_direction_memory');
+    options = current_options(options);
+    if strcmp(options.Algorithm,'ds')
+        scales=max(abs(x0),options.StepTolerance);scales(x0==0)=max(1,options.StepTolerance);
+        options.alpha_init=max(scales);
+    end
     [x, ~, exitflag, output] = bds(objective, x0, options);
     assert(output.funcCount <= budget);
     assert(isnumeric(exitflag) && isscalar(exitflag));

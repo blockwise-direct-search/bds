@@ -53,16 +53,16 @@ end
 
 switch strategy
     case 1
-        array(1:index) = array([index, 1:index-1]);
+        array(1:index) = array([index, 1:index - 1]);
     case 2
-        array = array([index:end, 1:index-1]);
+        array = array([index:end, 1:index - 1]);
     case 3
-        array = array([index+1:end, 1:index]);
+        array = array([index + 1:end, 1:index]);
 end
 
 % Check whether the output is in the right type.
 if ~isrealvector(array)
     error("Array is not a real vector.");
 end
-    
+
 end

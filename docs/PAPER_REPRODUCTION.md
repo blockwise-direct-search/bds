@@ -1,3 +1,7 @@
+> Current production changed on 2026-11-17. The records below describe frozen
+> historical experiments. Reproduce them with their recorded source snapshots,
+> not the current serial refactor. See [current execution rules](BDS_ACCELERATION_OVERVIEW.md).
+
 # 论文配置与生产 BDS 的对应关系
 
 ## 2026-11-06 的 rolling 加速移植

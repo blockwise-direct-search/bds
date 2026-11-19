@@ -18,7 +18,7 @@ function rosenbrock_example(options, x0)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Set options to an empty structure if it is not provided.
-% The default acceleration is momentum followed, when needed, by pattern.
+% The default acceleration searches from the polling point along momentum and pattern.
 if nargin < 1
     options = struct();
 end

@@ -39,7 +39,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         matlab: [R2024b, latest]
-        Algorithm: [cbds, pbds, rbds, pads, ds]
+        Algorithm: [cbds, pbds, rbds, ds]
 
     steps:
 

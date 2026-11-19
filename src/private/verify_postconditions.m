@@ -57,12 +57,12 @@ if isfield(output, "xhist")
     if ~(isrealmatrix(xhist) && all(size(xhist) == [length(xopt), nhist]))
         error("output.xhist is not a real matrix.");
     end
-    
+
     % Check whether length(fhist) is equal to length(xhist) and nf respectively.
     if ~(length(fhist) == size(xhist, 2) && size(xhist, 2) == nf)
         error("length of fhist is not equal to length of xhist or nf.");
     end
-    
+
     % Check whether fhist == fun(xhist).
     fhist_eval = nan(1, length(fhist));
     for i = 1:length(fhist)
@@ -70,10 +70,10 @@ if isfield(output, "xhist")
             fhist_eval(i) = eval_fun(fun, xhist(:, i)');
         else
             fhist_eval(i) = eval_fun(fun, xhist(:, i));
-        end      
+        end
     end
     % In case of fhist_eval(i) = nan or fhist(i) = nan.
-    assert(all( (isnan(fhist) & isnan(fhist_eval)) | fhist==fhist_eval ));
+    assert(all( (isnan(fhist) & isnan(fhist_eval)) | fhist == fhist_eval ));
 end
 
 end

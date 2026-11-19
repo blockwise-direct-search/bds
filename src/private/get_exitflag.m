@@ -3,7 +3,7 @@ function [exitflag] = get_exitflag(information)
 %   FTARGET_REACHED                 Function value is smaller than or equal to FTARGET.
 %   MAXFUN_REACHED                  The number of function evaluations reaches MAXFUN.
 %   MAXIT_REACHED                   The number of iterations reaches MAXIT.
-%   SMALL_ALPHA                     Step size is below StepTolerance. In the case of variable step 
+%   SMALL_ALPHA                     Step size is below StepTolerance. In the case of variable step
 %                                   sizes, SMALL_ALPHA indicates the largest component of step sizes
 %                                   is below StepTolerance.
 %   SMALL_OBJECTIVE_CHANGE          The change of the function value is small.

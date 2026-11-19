@@ -1,13 +1,13 @@
 function [xopt, fopt, exitflag, output] = inner_direct_search(fun, ...
     xbase, fbase, D, direction_indices, alpha, options)
-%INNER_DIRECT_SEARCH performs a single iteration of classical direct search 
+%INNER_DIRECT_SEARCH performs a single iteration of classical direct search
 %   within a given block.
 %
 %   [xopt, fopt, EXITFLAG, OUTPUT] = INNER_DIRECT_SEARCH(FUN, xbase, fbase, D, ...
 %   DIRECTION_INDICES, ALPHA, OPTIONS) returns a structure OUTPUT including
-%   fhist, xhist, nf, direction_indices, terminate, and sufficient_decrease, working with the 
-%   structure OPTIONS, which includes MaxFunctionEvaluations, ftarget, forcing_function, 
-%   reduction_factor, polling_inner, cycling_inner, iprint, FunctionEvaluations_exhausted, and 
+%   fhist, xhist, nf, direction_indices, terminate, and sufficient_decrease, working with the
+%   structure OPTIONS, which includes MaxFunctionEvaluations, ftarget, forcing_function,
+%   reduction_factor, polling_inner, cycling_inner, iprint, FunctionEvaluations_exhausted, and
 %   i_real.
 %
 %   direction_indices is the indices of directions of the current block in D.
@@ -35,11 +35,11 @@ n = length(xbase);
 num_directions = length(direction_indices);
 fhist = nan(1, num_directions);
 xhist = nan(n, num_directions);
-nf = 0; 
+nf = 0;
 fopt = fbase;
 xopt = xbase;
 % Initialize sufficient_decrease to false in case it is not set within the loop.
-% This ensures that if the algorithm terminates early (e.g., by reaching ftarget after the first 
+% This ensures that if the algorithm terminates early (e.g., by reaching ftarget after the first
 % evaluation), sufficient_decrease remains well-defined and consistent with the algorithm's logic.
 sufficient_decrease = false;
 invalid_points = [];
@@ -48,7 +48,7 @@ for j = 1 : num_directions
 
     % Evaluate the objective function for the current polling direction.
     xnew = xbase + alpha * D(:, j);
-    % fnew_real is the real function value at xnew, which is the value returned by fun 
+    % fnew_real is the real function value at xnew, which is the value returned by fun
     % (not fnew).
     [fnew, fnew_real, is_valid] = eval_fun(fun, xnew);
     nf = nf + 1;
@@ -72,7 +72,7 @@ for j = 1 : num_directions
             fprintf("Warning: The function evaluation at the current trial point is not valid.\n");
         end
     end
-    
+
     % Update the best point and function value. eval_fun currently maps a
     % failed NaN evaluation to Inf for algorithmic comparisons; retain the NaN
     % clause as a defensive safeguard in case that policy changes.
@@ -80,9 +80,9 @@ for j = 1 : num_directions
         xopt = xnew;
         fopt = fnew;
     end
-    
-    % Check whether ftarget or MaxFunctionEvaluations is reached immediately after every function 
-    % evaluation. If one of them is reached at xnew, no further computation should be entertained 
+
+    % Check whether ftarget or MaxFunctionEvaluations is reached immediately after every function
+    % evaluation. If one of them is reached at xnew, no further computation should be entertained
     % in this inner direct search.
     if fnew <= ftarget || nf >= MaxFunctionEvaluations
         break;
@@ -92,17 +92,17 @@ for j = 1 : num_directions
     % decrease. eval_fun currently maps failed NaN evaluations to Inf, so the
     % second clause is a defensive safeguard.
     % This variable is used in two places:
-    % 1. In opportunistic polling mode: to decide whether to cycle direction indices and stop 
+    % 1. In opportunistic polling mode: to decide whether to cycle direction indices and stop
     % polling.
-    % 2. In estimated gradient computation: as a condition to determine whether to use this 
+    % 2. In estimated gradient computation: as a condition to determine whether to use this
     % direction in the gradient estimation.
-    sufficient_decrease = (fnew + reduction_factor(1) * forcing_function(alpha)/2 < fbase) || ...
-                        (isnan(fbase) && ~isnan(fnew));
+    sufficient_decrease = (fnew + reduction_factor(1) * forcing_function(alpha) / 2 < fbase) || ...
+        (isnan(fbase) && ~isnan(fnew));
 
     % In the opportunistic case, if the current iteration achieves sufficient decrease,
-    % stop the computations after cycling the indices of the polling directions. The reason  
-    % that we cycle indices here is because inner_direct_search is called in a loop 
-    % in outer_direct_search. 
+    % stop the computations after cycling the indices of the polling directions. The reason
+    % that we cycle indices here is because inner_direct_search is called in a loop
+    % in outer_direct_search.
     if sufficient_decrease && ~strcmpi(polling_inner, "complete")
         direction_indices = cycling(direction_indices, j, cycling_strategy);
         break;

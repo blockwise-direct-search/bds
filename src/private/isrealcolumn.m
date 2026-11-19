@@ -1,7 +1,7 @@
 function [isrc, len] = isrealcolumn(x)
-%This file is cited from https://github.com/libprima/prima/blob/main/matlab/tests/private/isrealcolumn.m, 
+%This file is cited from https://github.com/libprima/prima/blob/main/matlab/tests/private/isrealcolumn.m,
 %which is written by Zaikun ZHANG.
-%ISREALCOLUMN checks whether x is a real column. If yes, it returns len = length(x); otherwise, 
+%ISREALCOLUMN checks whether x is a real column. If yes, it returns len = length(x); otherwise,
 %len = nan.
 %   N.B.: isrealcolumn([]) = true
 
