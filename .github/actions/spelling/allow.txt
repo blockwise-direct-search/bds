@@ -18,6 +18,7 @@ afterchaptertitle
 Afternotes
 agrangian
 Agrawal
+AGROW
 Ahlfors
 aiaaj
 Aineq
@@ -68,6 +69,7 @@ arcsin
 arctan
 arg
 ARGLINA
+ARGLINB
 argmax
 argmin
 ARGTRIGLS
@@ -150,6 +152,7 @@ bigcap
 bigcirc
 bigcup
 bigden
+BIGGS
 biglag
 bigodot
 bigoplus
@@ -169,6 +172,7 @@ Bineq
 Biogr
 Birgin
 Birkh
+bitget
 Bjorstad
 blackbox
 blacklozenge
@@ -259,6 +263,7 @@ chebquad
 Chebyquad
 checkandfixthelayout
 checkbib
+checkcode
 Cheon
 Chernoff
 Chiappa
@@ -618,6 +623,7 @@ fthreshold
 ftml
 fto
 ftol
+ftrial
 fttcs
 Fubini
 fullfile
@@ -630,6 +636,7 @@ funn
 Funval
 Furber
 fval
+fwrite
 Gachelin
 Gallivan
 GAMM
@@ -676,6 +683,7 @@ gitsubmodule
 Glazman
 Gleichungen
 Glineur
+glnxa
 Globale
 Glowinski
 gman
@@ -770,6 +778,7 @@ HTTPS
 huangcunxin
 HYDC
 HYDCAR
+hyperlinks
 hyperparameter
 hyperparameters
 hyperref
@@ -834,6 +843,8 @@ isequal
 isequiv
 Iserles
 isfield
+isfile
+isfolder
 isinf
 isinteger
 isintegerscalar
@@ -845,6 +856,7 @@ isnan
 isnumeric
 isnumvec
 isol
+isrand
 isrc
 isreal
 isrealcolumn
@@ -902,6 +914,8 @@ jrnbs
 jrssb
 jsc
 jsiam
+json
+jsondecode
 Jungers
 Kakade
 Kalamkar
@@ -957,9 +971,11 @@ Langou
 Langtangen
 LAPACK
 Lastnames
+lastwarn
 latextemplates
 lbfgs
 lceil
+ldd
 lder
 lderian
 ldots
@@ -999,8 +1015,11 @@ lhd
 lhtian
 LIARWHD
 libblades
+libmex
+libmx
 libprima
 libstdc
+libut
 Lidskii
 Liesen
 liminf
@@ -1138,12 +1157,14 @@ measuredangle
 Menickelly
 mes
 meshgrid
+metadata
 METHANB
 METHANL
 Methode
 Methodol
 Methven
 Meurant
+mexa
 Meza
 mfiledir
 mfilename
@@ -1264,8 +1285,10 @@ nlopt
 nmath
 nmid
 nnz
+noacc
 nobottomtitles
 Nocedal
+nocreate
 Noda
 noindent
 Nombres
@@ -1331,6 +1354,7 @@ Opin
 oplus
 opteng
 Opti
+opti
 optim
 Optim
 optimisation
@@ -1365,6 +1389,7 @@ Pardalos
 parfor
 Parikh
 parindent
+parpool
 Parrilo
 partnamefont
 partnumfont
@@ -1377,6 +1402,7 @@ patternsearch
 Pauwels
 pbaspect
 pbds
+pclean
 pdf
 pdfborder
 pdfcrop
@@ -1453,6 +1479,7 @@ precsim
 Precup
 Prefs
 PRELOAD
+preload
 Prieto
 printchaptername
 printchapternum
@@ -1482,6 +1509,7 @@ pzc
 qadd
 qam
 qbeg
+qclean
 Qian
 Qiu
 qjmath
@@ -1519,6 +1547,7 @@ rech
 Recht
 reciq
 reduc
+refactor
 refcheck
 reftoget
 regexp
@@ -1539,6 +1568,7 @@ repmat
 repositoryformatversion
 required
 restoredefaultpath
+rethrown
 Revista
 Reyes
 rfloor
@@ -1573,6 +1603,7 @@ rik
 Rinaldi
 Rios
 risingdotseq
+rmdir
 rmfamily
 rmfield
 rmoustache
@@ -1759,6 +1790,7 @@ STRATEC
 strcat
 strcmp
 strcmpi
+strfind
 strjoin
 strlength
 stronconv
@@ -1767,6 +1799,7 @@ strs
 strsplit
 strtrim
 struco
+structs
 stsin
 subadditivity
 subdifferential
@@ -1828,6 +1861,7 @@ tempa
 tempb
 tempc
 tempdir
+tempname
 tempq
 Tenorio
 Terlaky
@@ -1915,6 +1949,7 @@ Tropp
 Trosset
 trsapp
 tschel
+tsfsb
 Tshimanga
 tsum
 ttfamily
@@ -1927,6 +1962,7 @@ twoside
 twostep
 ubuntu
 ucmmp
+uint
 uistack
 Ulbrich
 ulcorner
@@ -1936,6 +1972,7 @@ und
 underdetermined
 uninstall
 uninstalls
+uninstrumented
 unittest
 Universitext
 unlhd
@@ -1963,8 +2000,10 @@ utils
 utm
 utx
 VALHIST
+validateattributes
 Vanaret
 varargin
+varargout
 VARDIM
 varepsilon
 varkappa
@@ -2056,6 +2095,7 @@ xspace
 XTick
 xtol
 xtol 
+xtrial
 Xuan
 xval
 xyz

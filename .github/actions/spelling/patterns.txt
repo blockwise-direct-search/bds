@@ -76,6 +76,9 @@
 \b\w+\.(?:tex|pdf|md|txt|gif|png|jpg|jpeg|bmp|svg|doc|docx|xls|xlsx|ppt|pptx|csv|tsv|json|yaml|yml|xml|ini|log|conf|cfg|c|h|cpp|hpp|py|java|js|css|html|php|sql)\b
 {(?:\w|\\)+\.(?:tex|pdf|md|txt|gif|png|jpg|jpeg|bmp|svg|doc|docx|xls|xlsx|ppt|pptx|csv|tsv|json|yaml|yml|xml|ini|log|conf|cfg|c|h|cpp|hpp|py|java|js|css|html|php|sql)|{(?:\w|\\)+}
 
-# Only include .m and .md files for spell checking
-*.m
-*.md
+# SHA-256 checksums
+\b[0-9a-fA-F]{64}\b
+
+# Recorded server verification directories
+(?<=/)bds_rolling_verify_20261106_7sjnya(?=/)
+(?<=/)bds_compact_verify_20261106_CZW0cl(?=/)
