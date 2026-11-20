@@ -5,7 +5,7 @@ function result = serial_reference(fun, x, o)
 n=numel(x);x=x(:);a=ones(n,1);memory=zeros(n,n);
 points=[];raw=[];blocks=zeros(1,0);starts=[];history=[];events=[];
 stream=RandStream('mt19937ar','Seed',o.seed);
-f=evaluate(x);best=x;bestf=f;flag=1;
+f=evaluate(x);best=x;fbest=f;flag=1;
 for k=1:o.MaxFunctionEvaluations
     if numel(raw)>=o.MaxFunctionEvaluations || f<=o.ftarget,break;end
     if strcmp(o.Algorithm,'rbds')
@@ -24,7 +24,7 @@ for k=1:o.MaxFunctionEvaluations
     for sign=[1,-1]
         z=x;z(i)=z(i)+sign*a(i);v=evaluate(z);
         if v<fp,yp=z;fp=v;end
-        if v<bestf,best=z;bestf=v;end
+        if v<fbest,best=z;fbest=v;end
         if numel(raw)>=o.MaxFunctionEvaluations || v<=o.ftarget || v<before,break;end
     end
     if fp+eps*a(i)^2<before,a(i)=2*a(i);else,a(i)=.5*a(i);end
@@ -71,9 +71,9 @@ for k=1:o.MaxFunctionEvaluations
                             f = v;
                         end
                     end
-                    if v < bestf
+                    if v < fbest
                         best = z;
-                        bestf = v;
+                        fbest = v;
                     end
                     if v <= o.ftarget
                         flag = 0;
@@ -92,7 +92,7 @@ for k=1:o.MaxFunctionEvaluations
     history(:,end+1)=x;
 end
 if f<=o.ftarget,flag=0;end
-result=struct('x',best,'f',bestf,'flag',flag,'points',points,'values',raw, ...
+result=struct('x',best,'f',fbest,'flag',flag,'points',points,'values',raw, ...
     'blocks',blocks,'events',events);
     function value=evaluate(z)
         try,r=fun(z);catch,r=nan;end

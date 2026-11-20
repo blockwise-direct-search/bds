@@ -52,8 +52,8 @@ for algorithm={'cbds','pbds','rbds','ds'}
      'output_xhist',true,'output_alpha_hist',true,'output_block_hist',true);
     fun=@(x)sum((x-.27).^2)+.01*sum(sin(x));
     [x,f,flag,out]=bds(fun,(1:n)'/3,o);
-    [xr,fr,flagr,outr]=bds_before_serial(fun,(1:n)'/3,frozen_acceleration_options(o));
-    assert(isequaln(x,xr)&&isequaln(f,fr)&&flag==flagr&&isequaln(out,outr));
+    [x_ref,f_ref,exitflag_ref,output_ref]=bds_before_serial(fun,(1:n)'/3,frozen_acceleration_options(o));
+    assert(isequaln(x,x_ref)&&isequaln(f,f_ref)&&flag==exitflag_ref&&isequaln(out,output_ref));
     count=count+1;
    end
   end

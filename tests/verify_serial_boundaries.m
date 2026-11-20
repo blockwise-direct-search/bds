@@ -38,10 +38,10 @@ for mask=0:15
  [xx,ff,fl,oo]=bds(fun,[0;0],p);
  assert(isequaln(xx,x)&&ff==f&&fl==flag&&isequaln(oo.fhist,out.fhist));
 end
-[xr,fr,flr,orr]=bds(@row_objective,[0,0],o);
-assert(isequal(xr,x')&&fr==f&&flr==flag&&isequaln(orr.fhist,out.fhist));
-% General bases, uneven block partitions and complete polling retain exact
-% nonaccelerated behavior against the existing independent frozen solver.
+[x_row,f_row,exitflag_row,output_row]=bds(@row_objective,[0,0],o);
+assert(isequal(x_row,x')&&f_row==f&&exitflag_row==flag&&isequaln(output_row.fhist,out.fhist));
+% With acceleration disabled, compare against the frozen solver for general
+% bases, uneven block partitions and complete polling.
 for grouped={ {[1,2],3}, {1,[2,3]}, {[1,3],2} }
  for cycling=0:3
   p=rmfield(o,'Algorithm');p.num_blocks=2;
@@ -50,9 +50,9 @@ for grouped={ {[1,2],3}, {1,[2,3]}, {[1,3],2} }
   p.cycling_inner=cycling;p.polling_inner='complete';
   p.output_grad_hist=false;p.MaxFunctionEvaluations=60;
   [xx,ff,fl,oo]=bds(fun,zeros(3,1),p);
-  [xxr,ffr,flrr,oor]=bds_without_acceleration_reference(fun,zeros(3,1), ...
+  [x_ref,f_ref,exitflag_ref,output_ref]=bds_without_acceleration_reference(fun,zeros(3,1), ...
    rmfield(p,'use_search_acceleration'));
-  assert(isequaln(xx,xxr)&&ff==ffr&&fl==flrr&&isequaln(oo,oor));
+  assert(isequaln(xx,x_ref)&&ff==f_ref&&fl==exitflag_ref&&isequaln(oo,output_ref));
  end
 end
 % Unsupported algorithm names fail before the initial objective evaluation.

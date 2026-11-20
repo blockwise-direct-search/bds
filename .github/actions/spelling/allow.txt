@@ -852,6 +852,7 @@ islogical
 islogicalscalar
 ismatrix
 ismember
+ismissing
 isnan
 isnumeric
 isnumvec
@@ -1438,6 +1439,7 @@ Pillo
 Pinnau
 pjams
 pjm
+placeholders
 Planiden
 Plemmons
 plib
